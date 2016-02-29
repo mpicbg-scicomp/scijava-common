@@ -29,7 +29,7 @@
  * #L%
  */
 
-package org.scijava.command.console;
+package org.scijava.run.console;
 
 import java.util.LinkedList;
 import java.util.Map;
