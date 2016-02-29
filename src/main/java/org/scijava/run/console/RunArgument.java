@@ -35,13 +35,13 @@ import java.util.LinkedList;
 import java.util.Map;
 
 import org.scijava.command.CommandInfo;
-import org.scijava.command.CommandService;
 import org.scijava.console.AbstractConsoleArgument;
 import org.scijava.console.ConsoleArgument;
 import org.scijava.console.ConsoleUtils;
 import org.scijava.log.LogService;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.run.RunService;
 
 /**
  * Handles the {@code --run} command line argument.
@@ -54,7 +54,7 @@ import org.scijava.plugin.Plugin;
 public class RunArgument extends AbstractConsoleArgument {
 
 	@Parameter
-	private CommandService commandService;
+	private RunService runService;
 
 	@Parameter
 	private LogService logService;
@@ -73,10 +73,10 @@ public class RunArgument extends AbstractConsoleArgument {
 			return;
 
 		args.removeFirst(); // --run
-		final String commandToRun = args.removeFirst();
+		final String classToRun = args.removeFirst();
 		final String paramString = ConsoleUtils.hasParam(args) ? "" : args.removeFirst();
 
-		run(commandToRun, paramString);
+		run(classToRun, paramString);
 	}
 
 	// -- Typed methods --
@@ -91,9 +91,9 @@ public class RunArgument extends AbstractConsoleArgument {
 	// -- Helper methods --
 
 	/** Implements the {@code --run} command line argument. */
-	private void run(final String commandToRun, final String optionString) {
+	private void run(final String classToRun, final String optionString) {
 		// get the command info
-		final CommandInfo info = getInfo(commandToRun);
+		final CommandInfo info = getInfo(classToRun);
 
 		// couldn't find anything to run
 		if (info == null)
@@ -103,7 +103,7 @@ public class RunArgument extends AbstractConsoleArgument {
 		final Map<String, Object> inputMap = ConsoleUtils.parseParameterString(optionString, info, logService);
 
 		try {
-			commandService.run(info, true, inputMap).get();
+			runService.run(info, true, inputMap);
 		} catch (final Exception exc) {
 			logService.error(exc);
 		}
@@ -113,11 +113,11 @@ public class RunArgument extends AbstractConsoleArgument {
 	 * Try to convert the given string to a {@link CommandInfo}
 	 */
 	private CommandInfo getInfo(final String commandToRun) {
-		CommandInfo info = commandService.getCommand(commandToRun);
+		CommandInfo info = runService.getCommand(commandToRun);
 		if (info == null) {
 			// command was not a class name; search for command by title instead
 			final String label = commandToRun.replace('_', ' ');
-			for (final CommandInfo ci : commandService.getCommands()) {
+			for (final CommandInfo ci : runService.getCommands()) {
 				if (label.equals(ci.getTitle())) {
 					info = ci;
 					break;
