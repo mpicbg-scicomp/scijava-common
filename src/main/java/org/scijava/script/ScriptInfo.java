@@ -38,9 +38,13 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.script.ScriptException;
 
@@ -370,24 +374,70 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		if (ScriptModule.RETURN_VALUE.equals(varName)) returnValueDeclared = true;
 	}
 
-	/** Parses a comma-delimited list of {@code key=value} pairs into a map. */
+//	/** Parses a comma-delimited list of {@code key=value} pairs into a map. */
+//	private HashMap<String, String> parseAttrs(final String attrs)
+//		throws ScriptException
+//	{
+//		// TODO: We probably want to use a real CSV parser.
+//		final HashMap<String, String> attrsMap = new HashMap<String, String>();
+//		for (final String token : attrs.split(",")) {
+//			if (token.isEmpty()) continue;
+//			final int equals = token.indexOf("=");
+//			if (equals < 0) throw new ScriptException("Invalid attribute: " + token);
+//			final String key = token.substring(0, equals).trim();
+//			String value = token.substring(equals + 1).trim();
+//			if (value.startsWith("\"") && value.endsWith("\"")) {
+//				value = value.substring(1, value.length() - 1);
+//			}
+//			attrsMap.put(key, value);
+//		}
+//		return attrsMap;
+//	}
+
 	private HashMap<String, String> parseAttrs(final String attrs)
-		throws ScriptException
+			throws ScriptException
 	{
-		// TODO: We probably want to use a real CSV parser.
+		Pattern pattern = Pattern.compile("([^,=\\s]+)\\s*?=\\s*?(\"[^\"]+\"|'[^']+'|\\{[^\\}]+\\}|[^\\W]\\w*)");
+
 		final HashMap<String, String> attrsMap = new HashMap<String, String>();
-		for (final String token : attrs.split(",")) {
-			if (token.isEmpty()) continue;
-			final int equals = token.indexOf("=");
-			if (equals < 0) throw new ScriptException("Invalid attribute: " + token);
-			final String key = token.substring(0, equals).trim();
-			String value = token.substring(equals + 1).trim();
-			if (value.startsWith("\"") && value.endsWith("\"")) {
-				value = value.substring(1, value.length() - 1);
-			}
+		Matcher matcher = pattern.matcher(attrs);
+		while (matcher.find())
+		{
+			if( matcher.group( 1 ) == null || matcher.group( 2 ) == null )
+				throw new ScriptException("Invalid key/attribute: " + matcher.group( 1 ) + ":" + matcher.group( 2 ));
+
+			String key = matcher.group( 1 );
+			if(attrsMap.containsKey( key ))
+				throw new ScriptException("Duplicate key: " + key );
+
+			String value = matcher.group( 2 );
+
+			if(!key.equals( "choices" ))
+				value = value.replaceAll( "\"|'", "" );
+
 			attrsMap.put(key, value);
 		}
+
 		return attrsMap;
+	}
+
+	private <T> List<T> parseChoices(final DefaultMutableModuleItem<T> item, final String choices)
+			throws ScriptException
+	{
+		Pattern pattern = Pattern.compile("(\"[^\"]+\"|'[^']+'|[^,\\s\\{\\}]+)");
+
+		final ArrayList<T> arrayList = new ArrayList<T>();
+		Matcher matcher = pattern.matcher(choices);
+		while (matcher.find())
+		{
+			if( matcher.group( 0 ) == null )
+				throw new ScriptException( "Invalid attribute: " + matcher.group( 0 ) );
+
+			String value = matcher.group( 0 ).replaceAll( "\"|'", "" );
+			arrayList.add( convertService.convert( value, item.getType() ) );
+		}
+
+		return arrayList;
 	}
 
 	private boolean isIOType(final String token) {
@@ -429,8 +479,7 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 			item.setCallback(value);
 		}
 		else if ("choices".equalsIgnoreCase(key)) {
-			// FIXME: Regex above won't handle {a,b,c} syntax.
-//			item.setChoices(choices);
+			item.setChoices( parseChoices( item, value ) );
 		}
 		else if ("columns".equalsIgnoreCase(key)) {
 			item.setColumnCount(convertService.convert(value, int.class));

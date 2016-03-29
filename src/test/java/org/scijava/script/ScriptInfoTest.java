@@ -31,6 +31,7 @@
 
 package org.scijava.script;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -141,6 +142,7 @@ public class ScriptInfoTest {
 			"% @LogService(required = false) log\n" + //
 			"% @int(label=\"Slider Value\", softMin=5, softMax=15, " + //
 			"stepSize=3, value=11, style=\"slider\") sliderValue\n" + //
+			"% @String(label = 'Monty Hall', choices = { 'Door A', 'Door B', 'Door C' }) montyHall\n" + //
 			"% @BOTH java.lang.StringBuilder buffer";
 
 		final ScriptInfo info =
@@ -158,12 +160,19 @@ public class ScriptInfoTest {
 		assertItem("buffer", StringBuilder.class, null, ItemIO.BOTH, true, true,
 			null, null, null, null, null, null, null, null, buffer);
 
+		final ModuleItem<?> choices = info.getInput("montyHall");
+		assertItem("montyHall", String.class, "Monty Hall", ItemIO.INPUT, true, true,
+				null, null, null, null, null, null, null, null, choices);
+
+		assertEquals( choices.getChoices().size(), 3 );
+		assertArrayEquals( new String[]{"Door A", "Door B", "Door C"} , choices.getChoices().toArray() );
+
 		final ModuleItem<?> result = info.getOutput("result");
 		assertItem("result", Object.class, null, ItemIO.OUTPUT, true, true, null,
 			null, null, null, null, null, null, null, result);
 
 		int inputCount = 0;
-		final ModuleItem<?>[] inputs = { log, sliderValue, buffer };
+		final ModuleItem<?>[] inputs = { log, sliderValue, choices, buffer };
 		for (final ModuleItem<?> inItem : info.inputs()) {
 			assertSame(inputs[inputCount++], inItem);
 		}
