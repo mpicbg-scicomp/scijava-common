@@ -64,9 +64,13 @@ import org.scijava.service.SciJavaService;
  */
 public interface CommandService extends PTService<Command>, SciJavaService {
 
-	EventService getEventService();
+	default EventService eventService() {
+		return context().getService(EventService.class);
+	}
 
-	ModuleService getModuleService();
+	default ModuleService moduleService() {
+		return context().getService(ModuleService.class);
+	}
 
 	/** Gets the list of all available {@link Command}s). */
 	List<CommandInfo> getCommands();
@@ -257,4 +261,17 @@ public interface CommandService extends PTService<Command>, SciJavaService {
 	Future<CommandModule> run(CommandInfo info, boolean process,
 		Map<String, Object> inputMap);
 
+	// -- Deprecated methods --
+
+	/** @deprecated Use {@link #eventService()} instead. */
+	@Deprecated
+	default EventService getEventService() {
+		return eventService();
+	}
+
+	/** @deprecated Use {@link #moduleService()} instead. */
+	@Deprecated
+	default ModuleService getModuleService() {
+		return moduleService();
+	}
 }

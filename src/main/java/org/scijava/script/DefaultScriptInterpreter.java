@@ -178,7 +178,6 @@ public class DefaultScriptInterpreter implements ScriptInterpreter {
 	 * For further details, see <a href="http://stackoverflow.com/a/5598207">SO
 	 * #5584674</a>.
 	 * </p>
-	 * </p>
 	 */
 	@Override
 	public Object interpret(final String line) throws ScriptException {
@@ -186,22 +185,23 @@ public class DefaultScriptInterpreter implements ScriptInterpreter {
 			if (!shouldEvaluatePendingInput(true)) return MORE_INPUT_PENDING;
 		}
 
+		if (pendingLineCount > 0) buffer.append("\n");
 		pendingLineCount++;
 		buffer.append(line);
-		buffer.append("\n");
+		final String command = buffer.toString();
 
 		if (!(engine instanceof Compilable)) {
 			// Not a compilable language.
 			// Evaluate directly, with no multi-line statements possible.
 			try {
-				return eval(buffer.toString());
+				return eval(command);
 			}
 			finally {
 				reset();
 			}
 		}
 
-		final CompiledScript cs = tryCompiling(buffer.toString(),
+		final CompiledScript cs = tryCompiling(command, //
 			getPendingLineCount(), line.length());
 
 		if (cs == null) {
@@ -215,7 +215,7 @@ public class DefaultScriptInterpreter implements ScriptInterpreter {
 		}
 		// Command is complete; evaluate the compiled script.
 		try {
-			addToHistory(buffer.toString());
+			addToHistory(command);
 			return cs.eval();
 		}
 		finally {

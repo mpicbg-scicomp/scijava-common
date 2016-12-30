@@ -147,7 +147,7 @@ public final class DefaultRecentFileService extends AbstractService implements
 	@Override
 	public void clear() {
 		recentFiles.clear();
-		prefService.clear(RECENT_FILES_KEY);
+		prefService.clear(RecentFileService.class, RECENT_FILES_KEY);
 
 		// unregister the modules with the module service
 		moduleService.removeModules(recentModules.values());
@@ -165,7 +165,7 @@ public final class DefaultRecentFileService extends AbstractService implements
 	@Override
 	public void initialize() {
 		loadList();
-		recentModules = new HashMap<String, ModuleInfo>();
+		recentModules = new HashMap<>();
 		for (final String path : recentFiles) {
 			recentModules.put(path, createInfo(path));
 		}
@@ -185,12 +185,13 @@ public final class DefaultRecentFileService extends AbstractService implements
 
 	/** Loads the list of recent files from persistent storage. */
 	private void loadList() {
-		recentFiles = prefService.getList(RECENT_FILES_KEY);
+		recentFiles = prefService.getList(RecentFileService.class,
+			RECENT_FILES_KEY);
 	}
 
 	/** Saves the list of recent files to persistent storage. */
 	private void saveList() {
-		prefService.putList(recentFiles, RECENT_FILES_KEY);
+		prefService.putList(RecentFileService.class, recentFiles, RECENT_FILES_KEY);
 	}
 
 	/** Creates a {@link ModuleInfo} to reopen data at the given path. */
@@ -201,7 +202,7 @@ public final class DefaultRecentFileService extends AbstractService implements
 		final CommandInfo info = new CommandInfo(commandClassName);
 
 		// hard code path to open as a preset
-		final HashMap<String, Object> presets = new HashMap<String, Object>();
+		final HashMap<String, Object> presets = new HashMap<>();
 		presets.put("inputFile", path);
 		info.setPresets(presets);
 

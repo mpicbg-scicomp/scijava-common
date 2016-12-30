@@ -35,6 +35,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 
 import org.scijava.Context;
 import org.scijava.console.OutputEvent.Source;
@@ -76,11 +77,13 @@ public class DefaultConsoleService extends
 	@Override
 	public void processArgs(final String... args) {
 		log.debug("Received command line arguments:");
-		final LinkedList<String> argList = new LinkedList<String>();
+		final LinkedList<String> argList = new LinkedList<>();
 		for (final String arg : args) {
 			log.debug("\t" + arg);
 			argList.add(arg);
 		}
+
+		final List<String> previousArgs = new ArrayList<>();
 
 		while (!argList.isEmpty()) {
 			final ConsoleArgument handler = getHandler(argList);
@@ -90,7 +93,22 @@ public class DefaultConsoleService extends
 				log.warn("Ignoring invalid argument: " + arg);
 				continue;
 			}
+
+			// keep a copy of the argument list prior to handling
+			previousArgs.clear();
+			previousArgs.addAll(argList);
+
+			// process the argument
 			handler.handle(argList);
+
+			// verify that the handler did something to the list;
+			// this guards against bugs which would cause infinite loops
+			if (sameElements(previousArgs, argList)) {
+				// skip improperly handled argument
+				final String arg = argList.removeFirst();
+				log.warn("Plugin '" + handler.getClass().getName() +
+					"' failed to handle argument: " + arg);
+			}
 		}
 	}
 
@@ -120,21 +138,6 @@ public class DefaultConsoleService extends
 			l.outputOccurred(event);
 	}
 
-	// -- PTService methods --
-
-	@Override
-	public Class<ConsoleArgument> getPluginType() {
-		return ConsoleArgument.class;
-	}
-
-	// -- Typed methods --
-
-	@Override
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public Class<LinkedList<String>> getType() {
-		return (Class) LinkedList.class;
-	}
-
 	// -- Disposable methods --
 
 	@Override
@@ -159,7 +162,7 @@ public class DefaultConsoleService extends
 		err = new OutputStreamReporter(Source.STDERR);
 		syserr.getParent().addOutputStream(err);
 
-		listeners = new ArrayList<OutputListener>();
+		listeners = new ArrayList<>();
 		cachedListeners = listeners.toArray(new OutputListener[0]);
 	}
 
@@ -172,6 +175,23 @@ public class DefaultConsoleService extends
 	private MultiPrintStream multiPrintStream(final PrintStream ps) {
 		if (ps instanceof MultiPrintStream) return (MultiPrintStream) ps;
 		return new MultiPrintStream(ps);
+	}
+
+	/**
+	 * Gets whether two lists have exactly the same elements in them.
+	 * <p>
+	 * We cannot use {@link List#equals(Object)} because want to check for
+	 * identical references, not per-element object equality.
+	 * </p>
+	 */
+	private boolean sameElements(final List<String> l1,
+		final List<String> l2)
+	{
+		if (l1.size() != l2.size()) return false;
+		for (int i = 0; i < l1.size(); i++) {
+			if (l1.get(i) != l2.get(i)) return false;
+		}
+		return true;
 	}
 
 	// -- Helper classes --

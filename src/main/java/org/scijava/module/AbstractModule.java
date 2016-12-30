@@ -48,15 +48,16 @@ public abstract class AbstractModule implements Module {
 	private final HashMap<String, Object> inputs;
 	private final HashMap<String, Object> outputs;
 
-	/** Table indicating resolved inputs. */
 	private final HashSet<String> resolvedInputs;
+	private final HashSet<String> resolvedOutputs;
 
 	private MethodRef initializerRef;
 
 	public AbstractModule() {
-		inputs = new HashMap<String, Object>();
-		outputs = new HashMap<String, Object>();
-		resolvedInputs = new HashSet<String>();
+		inputs = new HashMap<>();
+		outputs = new HashMap<>();
+		resolvedInputs = new HashSet<>();
+		resolvedOutputs = new HashSet<>();
 	}
 
 	// -- Module methods --
@@ -137,14 +138,43 @@ public abstract class AbstractModule implements Module {
 	}
 
 	@Override
-	public boolean isResolved(final String name) {
+	public boolean isInputResolved(final String name) {
 		return resolvedInputs.contains(name);
 	}
 
 	@Override
-	public void setResolved(final String name, final boolean resolved) {
-		if (resolved) resolvedInputs.add(name);
-		else resolvedInputs.remove(name);
+	public boolean isOutputResolved(final String name) {
+		return resolvedOutputs.contains(name);
+	}
+
+	@Override
+	public void resolveInput(final String name) {
+		final ModuleItem<?> item = getInputItem(name);
+		if (item != null) {
+			try {
+				item.validate(this);
+			}
+			catch (final MethodCallException exc) {
+				// NB: Hacky, but avoids changing the API signature.
+				throw new RuntimeException(exc);
+			}
+		}
+		resolvedInputs.add(name);
+	}
+
+	@Override
+	public void resolveOutput(final String name) {
+		resolvedOutputs.add(name);
+	}
+
+	@Override
+	public void unresolveInput(final String name) {
+		resolvedInputs.remove(name);
+	}
+
+	@Override
+	public void unresolveOutput(final String name) {
+		resolvedOutputs.remove(name);
 	}
 
 	// -- Helper methods --
@@ -152,7 +182,7 @@ public abstract class AbstractModule implements Module {
 	private Map<String, Object> createMap(final Iterable<ModuleItem<?>> items,
 		final boolean outputMap)
 	{
-		final Map<String, Object> map = new HashMap<String, Object>();
+		final Map<String, Object> map = new HashMap<>();
 		for (final ModuleItem<?> item : items) {
 			final String name = item.getName();
 			final Object value = outputMap ? getOutput(name) : getInput(name);
@@ -161,4 +191,10 @@ public abstract class AbstractModule implements Module {
 		return map;
 	}
 
+	private ModuleItem<?> getInputItem(final String name) {
+		for (final ModuleItem<?> item : getInfo().inputs()) {
+			if (item.getName().equals(name)) return item;
+		}
+		return null;
+	}
 }

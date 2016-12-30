@@ -38,6 +38,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.scijava.util.ArrayUtils.array;
 
 import java.util.Arrays;
 import java.util.List;
@@ -102,9 +103,11 @@ public class ContextCreationTest {
 				org.scijava.module.DefaultModuleService.class,
 				org.scijava.object.DefaultObjectService.class,
 				org.scijava.options.DefaultOptionsService.class,
+				org.scijava.parse.DefaultParseService.class,
 				org.scijava.platform.DefaultPlatformService.class,
 				org.scijava.plugin.DefaultPluginService.class,
 				org.scijava.prefs.DefaultPrefService.class,
+				org.scijava.run.DefaultRunService.class,
 				org.scijava.script.DefaultScriptHeaderService.class,
 				org.scijava.text.DefaultTextService.class,
 				org.scijava.thread.DefaultThreadService.class,
@@ -283,33 +286,32 @@ public class ContextCreationTest {
 	 * Verifies that the order plugins appear in the PluginIndex and Service list
 	 * does not affect which services are loaded.
 	 */
-	@SuppressWarnings("unchecked")
 	@Test
 	public void testClassOrder() {
 		final int expectedSize = 2;
 
 		// Same order, Base first
-		Context c =
-			createContext(pluginIndex(BaseImpl.class, ExtensionImpl.class), services(
-				BaseService.class, ExtensionService.class));
+		Context c = createContext(//
+			pluginIndex(BaseImpl.class, ExtensionImpl.class), //
+			array(BaseService.class, ExtensionService.class));
 		assertEquals(expectedSize, c.getServiceIndex().size());
 
 		// Same order, Extension first
-		c =
-			createContext(pluginIndex(ExtensionImpl.class, BaseImpl.class), services(
-				ExtensionService.class, BaseService.class));
+		c = createContext(//
+			pluginIndex(ExtensionImpl.class, BaseImpl.class), //
+			array(ExtensionService.class, BaseService.class));
 		assertEquals(expectedSize, c.getServiceIndex().size());
 
 		// Different order, Extension first
-		c =
-			createContext(pluginIndex(ExtensionImpl.class, BaseImpl.class), services(
-				BaseService.class, ExtensionService.class));
+		c = createContext(//
+			pluginIndex(ExtensionImpl.class, BaseImpl.class), //
+			array(BaseService.class, ExtensionService.class));
 		assertEquals(expectedSize, c.getServiceIndex().size());
 
 		// Different order, Base first
-		c =
-			createContext(pluginIndex(BaseImpl.class, ExtensionImpl.class), services(
-				ExtensionService.class, BaseService.class));
+		c = createContext(//
+			pluginIndex(BaseImpl.class, ExtensionImpl.class), //
+			array(ExtensionService.class, BaseService.class));
 		assertEquals(expectedSize, c.getServiceIndex().size());
 	}
 
@@ -317,16 +319,15 @@ public class ContextCreationTest {
 	 * Verifies that the Service index created when using Abstract classes is the
 	 * same as for interfaces.
 	 */
-	@SuppressWarnings("unchecked")
 	@Test
 	public void testAbstractClasslist() {
-		final Context cAbstract =
-			createContext(pluginIndex(BaseImpl.class, ExtensionImpl.class), services(
-				AbstractBase.class, AbstractExtension.class));
+		final Context cAbstract = createContext(//
+			pluginIndex(BaseImpl.class, ExtensionImpl.class), //
+			array(AbstractBase.class, AbstractExtension.class));
 
-		final Context cService =
-			createContext(pluginIndex(BaseImpl.class, ExtensionImpl.class), services(
-				BaseService.class, ExtensionService.class));
+		final Context cService = createContext(//
+			pluginIndex(BaseImpl.class, ExtensionImpl.class), //
+			array(BaseService.class, ExtensionService.class));
 
 		assertEquals(cService.getServiceIndex().size(), cAbstract.getServiceIndex()
 			.size());
@@ -341,7 +342,7 @@ public class ContextCreationTest {
 		// create a 2-service context
 		final PluginIndex index = pluginIndex(BaseImpl.class, ExtensionImpl.class);
 		// Add another service, that is not indexed under Service.class
-		index.add(new PluginInfo<SciJavaPlugin>(ThreadService.class.getName(),
+		index.add(new PluginInfo<>(ThreadService.class.getName(),
 			SciJavaPlugin.class));
 		final Context c =
 			new Context(pluginIndex(BaseImpl.class, ExtensionImpl.class));
@@ -422,23 +423,13 @@ public class ContextCreationTest {
 	}
 
 	/**
-	 * Convenience method since you can't instantiate a Class<? extends Service>
-	 * array.
-	 */
-	private Class<? extends Service>[] services(
-		final Class<? extends Service>... serviceClasses)
-	{
-		return serviceClasses;
-	}
-
-	/**
 	 * Creates a PluginIndex and adds all the provided classes as plugins, indexed
 	 * under Service.class
 	 */
 	private PluginIndex pluginIndex(final Class<?>... plugins) {
 		final PluginIndex index = new PluginIndex(null);
 		for (final Class<?> c : plugins) {
-			index.add(new PluginInfo<Service>(c.getName(), Service.class));
+			index.add(new PluginInfo<>(c.getName(), Service.class));
 		}
 		return index;
 	}

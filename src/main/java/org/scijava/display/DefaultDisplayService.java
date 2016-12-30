@@ -80,22 +80,22 @@ public final class DefaultDisplayService extends AbstractService implements
 	// -- instance variables --
 
 	private final LinkedList<Display<?>> displayList =
-		new LinkedList<Display<?>>();
+		new LinkedList<>();
 
 	// -- DisplayService methods --
 
 	@Override
-	public EventService getEventService() {
+	public EventService eventService() {
 		return eventService;
 	}
 
 	@Override
-	public ObjectService getObjectService() {
+	public ObjectService objectService() {
 		return objectService;
 	}
 
 	@Override
-	public PluginService getPluginService() {
+	public PluginService pluginService() {
 		return pluginService;
 	}
 
@@ -183,7 +183,7 @@ public final class DefaultDisplayService extends AbstractService implements
 
 	@Override
 	public List<Display<?>> getDisplays(final Object o) {
-		final ArrayList<Display<?>> displays = new ArrayList<Display<?>>();
+		final ArrayList<Display<?>> displays = new ArrayList<>();
 		for (final Display<?> display : getDisplays()) {
 			if (display.isDisplaying(o)) displays.add(display);
 		}

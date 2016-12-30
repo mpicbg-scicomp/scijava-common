@@ -45,21 +45,18 @@ public abstract class AbstractInputPanel<P, W> implements InputPanel<P, W> {
 
 	/** Table of widgets. */
 	protected Map<String, InputWidget<?, W>> widgets =
-		new HashMap<String, InputWidget<?, W>>();
+		new HashMap<>();
 
 	// -- InputPanel methods --
 
 	@Override
-	public boolean supports(final InputWidget<?, ?> widget) {
-		// verify this panel's widget type matches that of the given widget
-		final Class<?> thisType = getWidgetComponentType();
-		final Class<?> thatType = widget.getComponentType();
-		return thisType.isAssignableFrom(thatType);
-	}
-
-	@Override
 	public void addWidget(final InputWidget<?, W> widget) {
 		widgets.put(widget.get().getItem().getName(), widget);
+	}
+	
+	@Override
+	public InputWidget<?, W> getWidget(final String name) {
+		return widgets.get(name);
 	}
 
 	@Override

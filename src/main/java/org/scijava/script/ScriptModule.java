@@ -88,6 +88,8 @@ public class ScriptModule extends AbstractModule implements Contextual {
 	/** Destination for standard error during script execution. */
 	private Writer error;
 
+	private Object returnValue;
+
 	public ScriptModule(final ScriptInfo info) {
 		this.info = info;
 	}
@@ -130,7 +132,7 @@ public class ScriptModule extends AbstractModule implements Contextual {
 
 	/** Gets the return value of the script. */
 	public Object getReturnValue() {
-		return getOutput(RETURN_VALUE);
+		return returnValue;
 	}
 
 	// -- Module methods --
@@ -156,7 +158,8 @@ public class ScriptModule extends AbstractModule implements Contextual {
 		if (error != null) {
 			scriptContext.setErrorWriter(error);
 			errorPrinter = new PrintWriter(error);
-		} else {
+		}
+		else {
 			errorPrinter = null;
 		}
 
@@ -167,7 +170,7 @@ public class ScriptModule extends AbstractModule implements Contextual {
 		}
 
 		// execute script!
-		Object returnValue = null;
+		returnValue = null;
 		try {
 			final Reader reader = getInfo().getReader();
 			if (reader == null) returnValue = engine.eval(new FileReader(path));
@@ -177,20 +180,16 @@ public class ScriptModule extends AbstractModule implements Contextual {
 			while (e instanceof ScriptException && e.getCause() != null) {
 				e = e.getCause();
 			}
-			if (error == null) {
-				log.error(e);
-			} else {
-				e.printStackTrace(errorPrinter);
-			}
+			if (error == null) log.error(e);
+			else e.printStackTrace(errorPrinter);
 		}
 
 		// populate output values
 		final ScriptLanguage language = getLanguage();
 		for (final ModuleItem<?> item : getInfo().outputs()) {
 			final String name = item.getName();
-			if (isResolved(name)) continue;
 			final Object value;
-			if (RETURN_VALUE.equals(name) && !getInfo().isReturnValueDeclared()) {
+			if (RETURN_VALUE.equals(name) && getInfo().isReturnValueAppended()) {
 				// NB: This is the special implicit return value output!
 				value = returnValue;
 			}
@@ -198,7 +197,6 @@ public class ScriptModule extends AbstractModule implements Contextual {
 			final Object decoded = language.decode(value);
 			final Object typed = conversionService.convert(decoded, item.getType());
 			setOutput(name, typed);
-			setResolved(name, true);
 		}
 
 		// flush output and error streams

@@ -58,7 +58,7 @@ public abstract class AbstractConsoleArgument extends
 	
 	public AbstractConsoleArgument(final int requiredArgs, final String... flags) {
 		numArgs = requiredArgs;
-		this.flags = new HashSet<String>();
+		this.flags = new HashSet<>();
 		for (final String s : flags) this.flags.add(s);
 	}
 
@@ -70,11 +70,7 @@ public abstract class AbstractConsoleArgument extends
 		return isFlag(args);
 	}
 
-	@Override
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public Class<LinkedList<String>> getType() {
-		return (Class) String.class;
-	}
+	// -- Internal methods --
 
 	/**
 	 * Check if the given list of arguments starts with a flag that matches this
@@ -85,5 +81,18 @@ public abstract class AbstractConsoleArgument extends
 	 */
 	protected boolean isFlag(final LinkedList<String> args) {
 		return flags.isEmpty() || flags.contains(args.getFirst());
+	}
+
+	/**
+	 * If the next argument is an appropriate parameter to a
+	 * {@link ConsoleArgument}, retrieves it; otherwise, returns null.
+	 *
+	 * @return The first argument of the given list, if it does not
+	 *         start with a {@code '-'} character; or null otherwise.
+	 */
+	protected String getParam(final LinkedList<String> args) {
+		if (args.isEmpty()) return null;
+		final String arg = args.getFirst();
+		return arg.startsWith("-") ? null : arg;
 	}
 }

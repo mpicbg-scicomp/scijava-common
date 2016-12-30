@@ -92,59 +92,6 @@ public class SortedObjectIndex<E extends Comparable<? super E>> extends
 		return changed;
 	}
 
-	private void mergeAfterSorting(final Collection<? extends E> c) {
-		final List<E> listToMerge = new ArrayList<E>(c);
-		Collections.sort(listToMerge);
-		final Map<Class<?>, List<E>> map = new HashMap<Class<?>, List<E>>();
-		for (final E e : listToMerge) {
-			for (final Class<?> clazz : getTypes(getType(e))) {
-				final List<E> list = retrieveList(clazz);
-				List<E> list2 = map.get(clazz);
-				if (list2 == null) {
-					list2 = list.size() == 0 ? (List<E>)list : new ArrayList<E>();
-					map.put(clazz, list2);
-				}
-				list2.add(e);
-			}
-		}
-		for (final Entry<Class<?>, List<E>> entry : map.entrySet()) {
-			final Class<?> clazz = entry.getKey();
-			final List<E> into = retrieveList(clazz);
-			final List<E> sorted = map.get(clazz);
-			if (into != sorted) mergeInto(sorted, into);
-		}
-	}
-
-	private void mergeInto(final List<? extends E> sorted, final List<E> into) {
-		if (sorted == into) return;
-		final int count = sorted.size();
-		if (count == 0) return;
-		if (into.size() == 0) {
-			into.addAll(sorted);
-			return;
-		}
-		int index1 = into.size() - 1;
-		int index2 = sorted.size() - 1;
-		for (int i = 0; i < count; i++) into.add(null);
-		int writeIndex = into.size() - 1;
-		E e1 = into.get(index1);
-		E e2 = sorted.get(index2);
-		while (writeIndex > index1) {
-			if (e1.compareTo(e2) < 0) {
-				into.set(writeIndex--, e2);
-				if (--index2 < 0) break;
-				e2 = sorted.get(index2);
-			} else {
-				into.set(writeIndex--, e1);
-				if (--index1 < 0) break;
-				e1 = into.get(index1);
-			}
-		}
-		while (index2 >= 0) {
-			into.set(writeIndex--, sorted.get(index2--));
-		}
-	}
-
 	// -- Internal methods --
 
 	@Override
@@ -186,6 +133,59 @@ public class SortedObjectIndex<E extends Comparable<? super E>> extends
 		@SuppressWarnings("unchecked")
 		final E typedObj = (E) o;
 		return Collections.binarySearch(list, typedObj);
+	}
+
+	private void mergeAfterSorting(final Collection<? extends E> c) {
+		final List<E> listToMerge = new ArrayList<>(c);
+		Collections.sort(listToMerge);
+		final Map<Class<?>, List<E>> map = new HashMap<>();
+		for (final E e : listToMerge) {
+			for (final Class<?> clazz : getTypes(getType(e))) {
+				final List<E> list = retrieveList(clazz);
+				List<E> list2 = map.get(clazz);
+				if (list2 == null) {
+					list2 = list.size() == 0 ? (List<E>)list : new ArrayList<>();
+					map.put(clazz, list2);
+				}
+				list2.add(e);
+			}
+		}
+		for (final Entry<Class<?>, List<E>> entry : map.entrySet()) {
+			final Class<?> clazz = entry.getKey();
+			final List<E> into = retrieveList(clazz);
+			final List<E> sorted = map.get(clazz);
+			if (into != sorted) mergeInto(sorted, into);
+		}
+	}
+
+	private void mergeInto(final List<? extends E> sorted, final List<E> into) {
+		if (sorted == into) return;
+		final int count = sorted.size();
+		if (count == 0) return;
+		if (into.size() == 0) {
+			into.addAll(sorted);
+			return;
+		}
+		int index1 = into.size() - 1;
+		int index2 = sorted.size() - 1;
+		for (int i = 0; i < count; i++) into.add(null);
+		int writeIndex = into.size() - 1;
+		E e1 = into.get(index1);
+		E e2 = sorted.get(index2);
+		while (writeIndex > index1) {
+			if (e1.compareTo(e2) < 0) {
+				into.set(writeIndex--, e2);
+				if (--index2 < 0) break;
+				e2 = sorted.get(index2);
+			} else {
+				into.set(writeIndex--, e1);
+				if (--index1 < 0) break;
+				e1 = into.get(index1);
+			}
+		}
+		while (index2 >= 0) {
+			into.set(writeIndex--, sorted.get(index2--));
+		}
 	}
 
 }

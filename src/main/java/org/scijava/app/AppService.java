@@ -31,19 +31,25 @@
 
 package org.scijava.app;
 
+import java.util.List;
 import java.util.Map;
 
 import org.scijava.plugin.SingletonService;
+import org.scijava.service.SciJavaService;
 
 /**
  * Interface for application-level functionality.
  * 
  * @author Curtis Rueden
  */
-public interface AppService extends SingletonService<App> {
+public interface AppService extends SingletonService<App>, SciJavaService {
 
 	/** Gets the foremost application (the one with the highest priority). */
-	App getApp();
+	default App getApp() {
+		final List<App> appList = getInstances();
+		if (appList == null || appList.isEmpty()) return null;
+		return appList.get(0);
+	}
 
 	/** Gets an application by name. */
 	App getApp(final String name);
@@ -55,4 +61,10 @@ public interface AppService extends SingletonService<App> {
 	 */
 	Map<String, App> getApps();
 
+	// -- SingletonService methods --
+
+	@Override
+	default Class<App> getPluginType() {
+		return App.class;
+	}
 }

@@ -124,6 +124,11 @@ public class CommandModuleItem<T> extends AbstractModuleItem<T> {
 	}
 
 	@Override
+	public String getValidater() {
+		return getParameter().validater();
+	}
+
+	@Override
 	public String getCallback() {
 		return getParameter().callback();
 	}
@@ -141,6 +146,38 @@ public class CommandModuleItem<T> extends AbstractModuleItem<T> {
 	@Override
 	public T getMaximumValue() {
 		return tValue(getParameter().max());
+	}
+
+	@Override
+	public T getDefaultValue() {
+		// NB: The default value for a command is the initial field value.
+		// E.g.:
+		//
+		//   @Parameter
+		//   private int weekdays = 5;
+		//
+		// To obtain this information, we need to instantiate the module, then
+		// extract the value of the associated field.
+		//
+		// Of course, the command might do evil things like:
+		//
+		//   @Parameter
+		//   private long time = System.currentTimeMillis();
+		//
+		// In which case the default value will vary by instance. But there is
+		// nothing we can really do about that. This is only a best effort.
+
+		try {
+			final Object dummy = getInfo().loadDelegateClass().newInstance();
+			@SuppressWarnings("unchecked")
+			final T value = (T) getField().get(dummy);
+			return value;
+		}
+		catch (final InstantiationException | IllegalAccessException
+				| ClassNotFoundException exc)
+		{
+			throw new IllegalStateException(exc);
+		}
 	}
 
 	@Override
@@ -166,7 +203,7 @@ public class CommandModuleItem<T> extends AbstractModuleItem<T> {
 		final String[] choices = getParameter().choices();
 		if (choices.length == 0) return super.getChoices();
 
-		final ArrayList<T> choiceList = new ArrayList<T>();
+		final ArrayList<T> choiceList = new ArrayList<>();
 		for (final String choice : choices) {
 			choiceList.add(tValue(choice));
 		}

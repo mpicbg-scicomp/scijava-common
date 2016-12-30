@@ -59,7 +59,7 @@ public class PluginIndexTest {
 
 		// add a plugin to the index
 		final PluginInfo<SciJavaPlugin> testPlugin =
-			new PluginInfo<SciJavaPlugin>(FooBar.class.getName(), SciJavaPlugin.class);
+			new PluginInfo<>(FooBar.class.getName(), SciJavaPlugin.class);
 		pluginIndex.add(testPlugin);
 
 		// retrieve the plugin from the index, by class
@@ -73,6 +73,8 @@ public class PluginIndexTest {
 		final PluginInfo<SciJavaPlugin> plugin =
 			pluginService.getPlugin(FooBar.class);
 		assertSame(testPlugin, plugin);
+
+		context.dispose();
 	}
 
 	/**
@@ -89,7 +91,7 @@ public class PluginIndexTest {
 		// add a fake plugin to the index
 		final String fakeClass = "foo.bar.FooBar";
 		final PluginInfo<SciJavaPlugin> testPlugin =
-			new PluginInfo<SciJavaPlugin>(fakeClass, SciJavaPlugin.class);
+			new PluginInfo<>(fakeClass, SciJavaPlugin.class);
 		pluginIndex.add(testPlugin);
 
 		// retrieve the fake plugin from the index, by class name
@@ -102,6 +104,8 @@ public class PluginIndexTest {
 
 		final PluginInfo<SciJavaPlugin> plugin = pluginService.getPlugin(fakeClass);
 		assertSame(testPlugin, plugin);
+
+		context.dispose();
 	}
 
 	/** A dummy plugin for testing the plugin service. */

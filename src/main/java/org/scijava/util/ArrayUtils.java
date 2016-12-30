@@ -79,6 +79,12 @@ public final class ArrayUtils {
 
 	// -- ArrayUtils methods --
 
+	/** Creates an array of the given type, containing the specified values. */
+	@SafeVarargs
+	public static <T> T[] array(final T... values) {
+		return values;
+	}
+
 	/**
 	 * Converts the provided Object to a {@link Collection} implementation. If the
 	 * object is an array type, a {@link PrimitiveArray} wrapper will be created.
@@ -114,11 +120,11 @@ public final class ArrayUtils {
 			return new DoubleArray((double[]) value);
 		}
 		if (value instanceof Object[]) {
-			return new ObjectArray<Object>((Object[]) value);
+			return new ObjectArray<>((Object[]) value);
 		}
 		// This object is neither an array nor a collection.
 		// So we wrap it in a list and return.
-		final List<Object> list = new ObjectArray<Object>(Object.class);
+		final List<Object> list = new ObjectArray<>(Object.class);
 		list.add(value);
 		return list;
 	}

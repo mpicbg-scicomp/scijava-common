@@ -33,8 +33,6 @@ package org.scijava.cache;
 
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 
 import org.scijava.Priority;
 import org.scijava.plugin.Plugin;
@@ -61,18 +59,10 @@ public class DefaultCacheService extends AbstractService implements
 		return map.get(key);
 	}
 
-	@SuppressWarnings("unchecked")
-	@Override
-	public <V> V get(final Object key, final Callable<V> valueLoader)
-		throws ExecutionException
-	{
-		return (V)get(key);
-	}
-
 	// -- Service Methods --
 
 	@Override
 	public void initialize() {
-		map = new WeakHashMap<Object, Object>();
+		map = new WeakHashMap<>();
 	}
 }

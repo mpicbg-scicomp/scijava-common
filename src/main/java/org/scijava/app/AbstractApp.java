@@ -31,12 +31,9 @@
 
 package org.scijava.app;
 
-import java.io.File;
-
 import org.scijava.log.LogService;
 import org.scijava.plugin.AbstractRichPlugin;
 import org.scijava.plugin.Parameter;
-import org.scijava.util.AppUtils;
 import org.scijava.util.Manifest;
 import org.scijava.util.POM;
 
@@ -56,15 +53,7 @@ public abstract class AbstractApp extends AbstractRichPlugin implements App {
 	/** JAR manifest with metadata about the application. */
 	private Manifest manifest;
 
-	@Override
-	public String getTitle() {
-		return getInfo().getName();
-	}
-
-	@Override
-	public String getVersion() {
-		return getPOM() == null ? "Unknown" : getPOM().getVersion();
-	}
+	// -- App methods --
 
 	@Override
 	public POM getPOM() {
@@ -85,47 +74,7 @@ public abstract class AbstractApp extends AbstractRichPlugin implements App {
 	}
 
 	@Override
-	public String getInfo(boolean mem) {
-		final String appTitle = getTitle();
-		final String appVersion = getVersion();
-		final String javaVersion = System.getProperty("java.version");
-		final String osArch = System.getProperty("os.arch");
-		final long maxMem = Runtime.getRuntime().maxMemory();
-		final long totalMem = Runtime.getRuntime().totalMemory();
-		final long freeMem = Runtime.getRuntime().freeMemory();
-		final long usedMem = totalMem - freeMem;
-		final long usedMB = usedMem / 1048576;
-		final long maxMB = maxMem / 1048576;
-		final StringBuilder sb = new StringBuilder();
-		sb.append(appTitle + " " + appVersion);
-		sb.append("; Java " + javaVersion + " [" + osArch + "]");
-		if (mem) sb.append("; " + usedMB + "MB of " + maxMB + "MB");
-		return sb.toString();
-	}
-
-	@Override
-	public String getSystemProperty() {
-		return getInfo().getName().toLowerCase() + ".dir";
-	}
-
-	@Override
-	public File getBaseDirectory() {
-		return AppUtils.getBaseDirectory(getSystemProperty(), getClass(), null);
-	}
-
-	@Override
 	public void about() {
 		if (log != null) log.info(getInfo(false));
 	}
-
-	@Override
-	public void prefs() {
-		// NB: Do nothing.
-	}
-
-	@Override
-	public void quit() {
-		getContext().dispose();
-	}
-
 }

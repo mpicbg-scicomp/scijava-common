@@ -2,7 +2,7 @@
  * #%L
  * SciJava Common shared library for SciJava software.
  * %%
- * Copyright (C) 2009 - 2015 Board of Regents of the University of
+ * Copyright (C) 2009 - 2016 Board of Regents of the University of
  * Wisconsin-Madison, Broad Institute of MIT and Harvard, and Max Planck
  * Institute of Molecular Cell Biology and Genetics.
  * %%
@@ -42,10 +42,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.script.Bindings;
+import javax.script.ScriptException;
 
 import org.scijava.Context;
 import org.scijava.Gateway;
-import org.scijava.log.LogService;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.PluginInfo;
 import org.scijava.plugin.PluginService;
@@ -69,12 +69,16 @@ public class ScriptREPL {
 	@Parameter(required = false)
 	private PluginService pluginService;
 
-	@Parameter(required = false)
-	private LogService log;
-
 	private final PrintStream out;
 
+	/** List of interpreter-friendly script languages. */
+	private List<ScriptLanguage> languages;
+
+	/** The currently active interpreter. */
 	private ScriptInterpreter interpreter;
+
+	/** Flag for debug mode. */
+	private boolean debug;
 
 	public ScriptREPL(final Context context) {
 		this(context, System.out);
@@ -84,6 +88,19 @@ public class ScriptREPL {
 		context.inject(this);
 		this.out = out instanceof PrintStream ?
 			(PrintStream) out : new PrintStream(out);
+	}
+
+	/**
+	 * Gets the list of languages compatible with the REPL.
+	 * <p>
+	 * This list will match those given by {@link ScriptService#getLanguages()},
+	 * but filtered to exclude any who report {@code true} for
+	 * {@link ScriptLanguage#isCompiledLanguage()}.
+	 * </p>
+	 */
+	public List<ScriptLanguage> getInterpretedLanguages() {
+		if (languages == null) initLanguages();
+		return languages;
 	}
 
 	/** Gets the script interpreter for the currently active language. */
@@ -121,15 +138,24 @@ public class ScriptREPL {
 		out.println("Welcome to the SciJava REPL!");
 		out.println();
 		help();
+		final List<ScriptLanguage> langs = getInterpretedLanguages();
+		if (langs.isEmpty()) {
+			out.println("--------------------------------------------------------------");
+			out.println("Uh oh! There are no SciJava script languages available!");
+			out.println("Are any on your classpath? E.g.: org.scijava:scripting-groovy?");
+			out.println("--------------------------------------------------------------");
+			out.println();
+			return;
+		}
 		out.println("Have fun!");
 		out.println();
-		lang(scriptService.getLanguages().get(0).getLanguageName());
+		lang(langs.get(0).getLanguageName());
 		populateBindings(interpreter.getBindings());
 	}
 
 	/** Outputs the prompt. */
 	public void prompt() {
-		out.print(interpreter.isReady() ? "> " : "\\ ");
+		out.print(interpreter == null || interpreter.isReady() ? "> " : "\\ ");
 	}
 
 	/**
@@ -140,23 +166,37 @@ public class ScriptREPL {
 	 * @return False iff the REPL should exit.
 	 */
 	public boolean evaluate(final String line) {
-		final String tLine = line.trim();
-		if (tLine.equals(":help")) help();
-		else if (tLine.equals(":vars")) vars();
-		else if (tLine.equals(":langs")) langs();
-		else if (tLine.startsWith(":lang ")) lang(line.substring(6).trim());
-		else if (line.trim().equals(":quit")) return false;
-		else {
-			// pass the input to the current interpreter for evaluation
-			try {
+		try {
+			final String tLine = line.trim();
+			if (tLine.equals(":help")) help();
+			else if (tLine.equals(":vars")) vars();
+			else if (tLine.equals(":langs")) langs();
+			else if (tLine.equals(":debug")) debug();
+			else if (tLine.startsWith(":lang ")) lang(line.substring(6).trim());
+			else if (tLine.equals(":quit")) return false;
+			else {
+				// ensure that a script language is active
+				if (interpreter == null) return true;
+
+				// pass the input to the current interpreter for evaluation
 				final Object result = interpreter.interpret(line);
 				if (result != ScriptInterpreter.MORE_INPUT_PENDING) {
 					out.println(s(result));
 				}
 			}
-			catch (final Throwable exc) {
-				exc.printStackTrace(out);
+		}
+		catch (final ScriptException exc) {
+			// NB: Something went wrong interpreting the line of code.
+			// Let's just display the error message, unless we are in debug mode.
+			if (debug) exc.printStackTrace(out);
+			else {
+				final String msg = exc.getMessage();
+				out.println(msg == null ? exc.getClass().getName() : msg);
 			}
+		}
+		catch (final Throwable exc) {
+			// NB: Something unusual went wrong. Dump the whole exception always.
+			exc.printStackTrace(out);
 		}
 		return true;
 	}
@@ -171,6 +211,7 @@ public class ScriptREPL {
 		out.println("  :vars           | dump a list of variables");
 		out.println("  :lang <name>    | switch the active language");
 		out.println("  :langs          | list available languages");
+		out.println("  :debug          | toggle full stack traces");
 		out.println("  :quit           | exit the REPL");
 		out.println();
 		out.println("Or type a statement to evaluate it with the active language.");
@@ -179,8 +220,10 @@ public class ScriptREPL {
 
 	/** Lists variables in the script context. */
 	public void vars() {
-		final List<String> keys = new ArrayList<String>();
-		final List<Object> types = new ArrayList<Object>();
+		if (interpreter == null) return; // no active script language
+
+		final List<String> keys = new ArrayList<>();
+		final List<Object> types = new ArrayList<>();
 		final Bindings bindings = interpreter.getBindings();
 		for (final String key : bindings.keySet()) {
 			final Object value = bindings.get(key);
@@ -202,28 +245,39 @@ public class ScriptREPL {
 		// create the new interpreter
 		final ScriptLanguage language = scriptService.getLanguageByName(langName);
 		if (language == null) {
-			throw new IllegalArgumentException("No such language: " + langName);
+			out.println("No such language: " + langName);
+			return;
 		}
 		final ScriptInterpreter newInterpreter =
 			new DefaultScriptInterpreter(language);
 
 		// preserve state of the previous interpreter
-		copyBindings(interpreter, newInterpreter);
+		try {
+			copyBindings(interpreter, newInterpreter);
+		}
+		catch (final Throwable t) {
+			t.printStackTrace(out);
+		}
 		out.println("language -> " +
 			newInterpreter.getLanguage().getLanguageName());
 		interpreter = newInterpreter;
 	}
 
 	public void langs() {
-		final List<String> names = new ArrayList<String>();
-		final List<String> versions = new ArrayList<String>();
-		final List<Object> aliases = new ArrayList<Object>();
-		for (final ScriptLanguage lang : scriptService.getLanguages()) {
+		final List<String> names = new ArrayList<>();
+		final List<String> versions = new ArrayList<>();
+		final List<Object> aliases = new ArrayList<>();
+		for (final ScriptLanguage lang : getInterpretedLanguages()) {
 			names.add(lang.getLanguageName());
 			versions.add(lang.getLanguageVersion());
 			aliases.add(lang.getNames());
 		}
 		printColumns(names, versions, aliases);
+	}
+
+	public void debug() {
+		debug = !debug;
+		out.println("debug mode -> " + debug);
 	}
 
 	// -- Main method --
@@ -244,6 +298,16 @@ public class ScriptREPL {
 	}
 
 	// -- Helper methods --
+
+	/** Initializes {@link #languages}. */
+	private synchronized void initLanguages() {
+		if (languages != null) return;
+		final List<ScriptLanguage> langs = new ArrayList<>();
+		for (final ScriptLanguage lang : scriptService.getLanguages()) {
+			if (!lang.isCompiledLanguage()) langs.add(lang);
+		}
+		languages = langs;
+	}
 
 	/** Populates the bindings with the context + services + gateways. */
 	private void populateBindings(final Bindings bindings) {
@@ -271,7 +335,7 @@ public class ScriptREPL {
 	}
 
 	private List<Gateway> gateways() {
-		final ArrayList<Gateway> gateways = new ArrayList<Gateway>();
+		final ArrayList<Gateway> gateways = new ArrayList<>();
 		if (pluginService == null) return gateways;
 		// HACK: Instantiating a Gateway with the noargs constructor spins
 		// up a second Context, which is not what we want. Perhaps SJC should
@@ -288,7 +352,7 @@ public class ScriptREPL {
 				gateways.add(gateway);
 			}
 			catch (final Throwable t) {
-				if (log != null) log.error(t);
+				t.printStackTrace(out);
 			}
 		}
 		return gateways;

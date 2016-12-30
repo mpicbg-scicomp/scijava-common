@@ -31,8 +31,11 @@
 
 package org.scijava.plugin;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.scijava.annotations.Index;
 import org.scijava.annotations.IndexItem;
@@ -51,6 +54,8 @@ public class DefaultPluginFinder implements PluginFinder {
 	/** Class loader to use when querying the annotation indexes. */
 	private final ClassLoader customClassLoader;
 
+	private final PluginBlacklist blacklist;
+
 	// -- Constructors --
 
 	public DefaultPluginFinder() {
@@ -59,6 +64,7 @@ public class DefaultPluginFinder implements PluginFinder {
 
 	public DefaultPluginFinder(final ClassLoader classLoader) {
 		customClassLoader = classLoader;
+		blacklist = new SysPropBlacklist();
 	}
 
 	// -- PluginFinder methods --
@@ -68,7 +74,7 @@ public class DefaultPluginFinder implements PluginFinder {
 		final List<PluginInfo<?>> plugins)
 	{
 		final HashMap<String, Throwable> exceptions =
-			new HashMap<String, Throwable>();
+			new HashMap<>();
 
 		// load the annotation indexes
 		final ClassLoader classLoader = getClassLoader();
@@ -77,6 +83,7 @@ public class DefaultPluginFinder implements PluginFinder {
 
 		// create a PluginInfo object for each item in the index
 		for (final IndexItem<Plugin> item : annotationIndex) {
+			if (blacklist.contains(item.className())) continue;
 			try {
 				final PluginInfo<?> info = createInfo(item, classLoader);
 				plugins.add(info);
@@ -101,12 +108,55 @@ public class DefaultPluginFinder implements PluginFinder {
 		final Class<SciJavaPlugin> pluginType =
 			(Class<SciJavaPlugin>) plugin.type();
 
-		return new PluginInfo<SciJavaPlugin>(className, pluginType, plugin, classLoader);
+		return new PluginInfo<>(className, pluginType, plugin, classLoader);
 	}
 
 	private ClassLoader getClassLoader() {
 		if (customClassLoader != null) return customClassLoader;
 		return Thread.currentThread().getContextClassLoader();
+	}
+
+	// -- Helper classes --
+
+	private interface PluginBlacklist {
+		boolean contains(String className);
+	}
+
+	/**
+	 * A blacklist defined by the {@code scijava.plugin.blacklist} system
+	 * property, formatted as a colon-separated list of regexes.
+	 * <p>
+	 * If a plugin class matches any of the regexes, it is excluded from the
+	 * plugin index.
+	 * </p>
+	 */
+	private class SysPropBlacklist implements PluginBlacklist {
+		private final List<Pattern> patterns;
+
+		public SysPropBlacklist() {
+			final String sysProp = System.getProperty("scijava.plugin.blacklist");
+			final String[] regexes = //
+				sysProp == null ? new String[0] : sysProp.split(":");
+			patterns = new ArrayList<>(regexes.length);
+			for (final String regex : regexes) {
+				try {
+					patterns.add(Pattern.compile(regex));
+				}
+				catch (final PatternSyntaxException exc) {
+					// NB: Ignore this malformed pattern.
+				}
+			}
+		}
+
+		// -- PluginBlacklist methods --
+
+		@Override
+		public boolean contains(final String className) {
+			for (final Pattern pattern : patterns) {
+				if (pattern.matcher(className).matches()) return true;
+			}
+			return false;
+		}
 	}
 
 }

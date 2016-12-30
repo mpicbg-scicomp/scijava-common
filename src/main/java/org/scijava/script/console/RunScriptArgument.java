@@ -44,10 +44,9 @@ import org.scijava.script.ScriptInfo;
 import org.scijava.script.ScriptService;
 
 /**
- * {@link ConsoleArgument} for executing scripts directly.
- *
- * @author Mark Hiner hinerm at gmail.com
+ * @deprecated Use {@link org.scijava.run.console.RunArgument} instead.
  */
+@Deprecated
 @Plugin(type = ConsoleArgument.class)
 public class RunScriptArgument extends AbstractConsoleArgument {
 
@@ -55,12 +54,12 @@ public class RunScriptArgument extends AbstractConsoleArgument {
 	private ScriptService scriptService;
 
 	@Parameter
-	private LogService logService;
+	private LogService log;
 
 	// -- Constructor --
 
 	public RunScriptArgument() {
-		super(2, "--run", "--script");
+		super(2, "--script");
 	}
 
 	// -- ConsoleArgument methods --
@@ -70,7 +69,10 @@ public class RunScriptArgument extends AbstractConsoleArgument {
 		if (!supports(args))
 			return;
 
-		args.removeFirst(); // --run
+		log.warn("The --script flag is deprecated, and will\n" +
+			"be removed in a future release. Use --run instead.");
+
+		args.removeFirst(); // --script
 		final String scriptToRun = args.removeFirst();
 		final String paramString = ConsoleUtils.hasParam(args) ? args.removeFirst() : "";
 
@@ -94,18 +96,20 @@ public class RunScriptArgument extends AbstractConsoleArgument {
 	private void run(final String scriptToRun, final String paramString) {
 		final File script = getScript(scriptToRun);
 
-		// couldn't find anything to run
-		if (script == null)
-			return;
+		if (script == null) {
+			// couldn't find anything to run
+			throw new UnsupportedOperationException(//
+				"Not a script: '" + scriptToRun + "'");
+		}
 
 		final ScriptInfo info = scriptService.getScript(script);
 
-		final Map<String, Object> inputMap = ConsoleUtils.parseParameterString(paramString, info, logService);
+		final Map<String, Object> inputMap = ConsoleUtils.parseParameterString(paramString, info, log);
 
 		try {
 			scriptService.run(info, true, inputMap).get();
 		} catch (final Exception exc) {
-			logService.error(exc);
+			log.error(exc);
 		}
 	}
 

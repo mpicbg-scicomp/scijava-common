@@ -35,11 +35,16 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.script.ScriptException;
@@ -55,6 +60,7 @@ import org.scijava.log.LogService;
 import org.scijava.module.AbstractModuleInfo;
 import org.scijava.module.DefaultMutableModuleItem;
 import org.scijava.module.ModuleException;
+import org.scijava.parse.ParseService;
 import org.scijava.plugin.Parameter;
 import org.scijava.util.DigestUtils;
 import org.scijava.util.FileUtils;
@@ -73,6 +79,7 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 
 	private static final int PARAM_CHAR_MAX = 640 * 1024; // should be enough ;-)
 
+	private final URL url;
 	private final String path;
 	private final String script;
 
@@ -86,10 +93,13 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	private ScriptService scriptService;
 
 	@Parameter
+	private ParseService parser;
+
+	@Parameter
 	private ConvertService convertService;
 
-	/** True iff the return value is explicitly declared as an output. */
-	private boolean returnValueDeclared;
+	/** True iff the return value should be appended as an output. */
+	private boolean appendReturnValue;
 
 	/**
 	 * Creates a script metadata object which describes the given script file.
@@ -99,7 +109,7 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	 * @param file The script file.
 	 */
 	public ScriptInfo(final Context context, final File file) {
-		this(context, file.getPath());
+		this(context, null, file.getPath(), null);
 	}
 
 	/**
@@ -110,7 +120,23 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	 * @param path Path to the script file.
 	 */
 	public ScriptInfo(final Context context, final String path) {
-		this(context, path, null);
+		this(context, null, path, null);
+	}
+
+	/**
+	 * Creates a script metadata object which describes a script at the given URL.
+	 * 
+	 * @param context The SciJava application context to use when populating
+	 *          service inputs.
+	 * @param url URL which references the script.
+	 * @param path Pseudo-path to the script file. This file does not actually
+	 *          need to exist, but rather provides a name for the script with file
+	 *          extension.
+	 */
+	public ScriptInfo(final Context context, final URL url, final String path)
+		throws IOException
+	{
+		this(context, url, path, new InputStreamReader(url.openStream()));
 	}
 
 	/**
@@ -127,22 +153,49 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	public ScriptInfo(final Context context, final String path,
 		final Reader reader)
 	{
-		setContext(context);
-		this.path = path;
+		this(context, null, path, reader);
+	}
 
-		String script = null;
+	private ScriptInfo(final Context context, final URL url, final String path,
+		final Reader reader)
+	{
+		setContext(context);
+		this.url = url(url, path);
+		this.path = path(url, path);
+
+		String contents = null;
 		if (reader != null) {
 			try {
-				script = getReaderContentsAsString(reader);
+				contents = getReaderContentsAsString(reader);
 			}
 			catch (final IOException exc) {
 				log.error("Error reading script: " + path, exc);
 			}
 		}
-		this.script = script;
+		script = contents;
 	}
 
 	// -- ScriptInfo methods --
+
+	/**
+	 * Gets the URL of the script.
+	 * <p>
+	 * If the actual source of the script is a URL (provided via
+	 * {@link #ScriptInfo(Context, URL, String)}), then this will return it.
+	 * </p>
+	 * <p>
+	 * Alternately, if the path (from {@link #getPath()}) is a real file on disk
+	 * (provided via {@link #ScriptInfo(Context, File)} or
+	 * {@link #ScriptInfo(Context, String)}), then the URL returned here will be a
+	 * {@code file://} one reference to it.
+	 * </p>
+	 * <p>
+	 * Otherwise, this method will return null.
+	 * </p>
+	 */
+	public URL getURL() {
+		return url;
+	}
 
 	/**
 	 * Gets the path to the script on disk.
@@ -223,16 +276,11 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	@Override
 	public void parseParameters() {
 		clearParameters();
-		returnValueDeclared = false;
+		appendReturnValue = true;
 
-		try {
-			final BufferedReader in;
-			if (script == null) {
-				in = new BufferedReader(new FileReader(getPath()));
-			}
-			else {
-				in = getReader();
-			}
+		try (final BufferedReader in = script == null ? //
+			new BufferedReader(new FileReader(getPath())) : getReader()) //
+		{
 			while (true) {
 				final String line = in.readLine();
 				if (line == null) break;
@@ -246,9 +294,8 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 				}
 				else if (line.matches(".*\\w.*")) break;
 			}
-			in.close();
 
-			if (!returnValueDeclared) addReturnValue();
+			if (appendReturnValue) addReturnValue();
 		}
 		catch (final IOException exc) {
 			log.error("Error reading script: " + path, exc);
@@ -258,9 +305,9 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		}
 	}
 
-	/** Gets whether the return value is explicitly declared as an output. */
-	public boolean isReturnValueDeclared() {
-		return returnValueDeclared;
+	/** Gets whether the return value is appended as an additional output. */
+	public boolean isReturnValueAppended() {
+		return appendReturnValue;
 	}
 
 	// -- ModuleInfo methods --
@@ -312,24 +359,40 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		return new File(path).toURI().normalize().toString();
 	}
 
+	// -- Versioned methods --
+
 	@Override
 	public String getVersion() {
 		final File file = new File(path);
 		if (!file.exists()) return null; // no version for non-existent script
-		final Date lastModified = FileUtils.getModifiedTime(file);
-		final String datestamp =
-			new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss").format(lastModified);
 		try {
-			final String hash = DigestUtils.bestHex(FileUtils.readFile(file));
-			return datestamp + "-" + hash;
+			return DigestUtils.bestHex(FileUtils.readFile(file));
 		}
 		catch (final IOException exc) {
 			log.error(exc);
 		}
+		final Date lastModified = FileUtils.getModifiedTime(file);
+		final String datestamp =
+			new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss").format(lastModified);
 		return datestamp;
 	}
 
 	// -- Helper methods --
+
+	private URL url(final URL u, final String p) {
+		if (u != null) return u;
+		try {
+			return new File(p).toURI().toURL();
+		}
+		catch (final MalformedURLException exc) {
+			log.debug("Cannot glean URL from path: " + p, exc);
+			return null;
+		}
+	}
+
+	private String path(final URL u, final String p) {
+		return p == null ? u.getPath() : p;
+	}
 
 	private void parseParam(final String param) throws ScriptException {
 		final int lParen = param.indexOf("(");
@@ -337,7 +400,7 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		if (rParen < lParen) {
 			throw new ScriptException("Invalid parameter: " + param);
 		}
-		if (lParen < 0) parseParam(param, parseAttrs(""));
+		if (lParen < 0) parseParam(param, parseAttrs("()"));
 		else {
 			final String cutParam =
 				param.substring(0, lParen) + param.substring(rParen + 1);
@@ -347,7 +410,7 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	}
 
 	private void parseParam(final String param,
-		final HashMap<String, String> attrs) throws ScriptException
+		final Map<String, Object> attrs) throws ScriptException
 	{
 		final String[] tokens = param.trim().split("[ \t\n]+");
 		checkValid(tokens.length >= 1, param);
@@ -367,27 +430,17 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		}
 		final Class<?> type = scriptService.lookupClass(typeName);
 		addItem(varName, type, attrs);
-		if (ScriptModule.RETURN_VALUE.equals(varName)) returnValueDeclared = true;
+
+		if (ScriptModule.RETURN_VALUE.equals(varName)) {
+			// NB: The return value variable is declared as an explicit OUTPUT.
+			// So we should not append the return value as an extra output.
+			appendReturnValue = false;
+		}
 	}
 
 	/** Parses a comma-delimited list of {@code key=value} pairs into a map. */
-	private HashMap<String, String> parseAttrs(final String attrs)
-		throws ScriptException
-	{
-		// TODO: We probably want to use a real CSV parser.
-		final HashMap<String, String> attrsMap = new HashMap<String, String>();
-		for (final String token : attrs.split(",")) {
-			if (token.isEmpty()) continue;
-			final int equals = token.indexOf("=");
-			if (equals < 0) throw new ScriptException("Invalid attribute: " + token);
-			final String key = token.substring(0, equals).trim();
-			String value = token.substring(equals + 1).trim();
-			if (value.startsWith("\"") && value.endsWith("\"")) {
-				value = value.substring(1, value.length() - 1);
-			}
-			attrsMap.put(key, value);
-		}
-		return attrsMap;
+	private Map<String, Object> parseAttrs(final String attrs) {
+		return parser.parse(attrs, false).asMap();
 	}
 
 	private boolean isIOType(final String token) {
@@ -401,98 +454,81 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 	}
 
 	/** Adds an output for the value returned by the script itself. */
-	private void addReturnValue() throws ScriptException {
-		final HashMap<String, String> attrs = new HashMap<String, String>();
+	private void addReturnValue() {
+		final HashMap<String, Object> attrs = new HashMap<>();
 		attrs.put("type", "OUTPUT");
 		addItem(ScriptModule.RETURN_VALUE, Object.class, attrs);
 	}
 
 	private <T> void addItem(final String name, final Class<T> type,
-		final Map<String, String> attrs) throws ScriptException
+		final Map<String, Object> attrs)
 	{
 		final DefaultMutableModuleItem<T> item =
-			new DefaultMutableModuleItem<T>(this, name, type);
+			new DefaultMutableModuleItem<>(this, name, type);
 		for (final String key : attrs.keySet()) {
-			final String value = attrs.get(key);
+			final Object value = attrs.get(key);
 			assignAttribute(item, key, value);
 		}
 		if (item.isInput()) registerInput(item);
-		if (item.isOutput()) registerOutput(item);
+		if (item.isOutput()) {
+			registerOutput(item);
+			// NB: Only append the return value as an extra
+			// output when no explicit outputs are declared.
+			appendReturnValue = false;
+		}
 	}
 
 	private <T> void assignAttribute(final DefaultMutableModuleItem<T> item,
-		final String key, final String value) throws ScriptException
+		final String k, final Object v)
 	{
 		// CTR: There must be an easier way to do this.
 		// Just compile the thing using javac? Or parse via javascript, maybe?
-		if ("callback".equalsIgnoreCase(key)) {
-			item.setCallback(value);
+		if (is(k, "callback")) item.setCallback(as(v, String.class));
+		else if (is(k, "choices")) item.setChoices(asList(v, item.getType()));
+		else if (is(k, "columns")) item.setColumnCount(as(v, int.class));
+		else if (is(k, "description")) item.setDescription(as(v, String.class));
+		else if (is(k, "initializer")) item.setInitializer(as(v, String.class));
+		else if (is(k, "validater")) item.setValidater(as(v, String.class));
+		else if (is(k, "type")) item.setIOType(as(v, ItemIO.class));
+		else if (is(k, "label")) item.setLabel(as(v, String.class));
+		else if (is(k, "max")) item.setMaximumValue(as(v, item.getType()));
+		else if (is(k, "min")) item.setMinimumValue(as(v, item.getType()));
+		else if (is(k, "name")) item.setName(as(v, String.class));
+		else if (is(k, "persist")) item.setPersisted(as(v, boolean.class));
+		else if (is(k, "persistKey")) item.setPersistKey(as(v, String.class));
+		else if (is(k, "required")) item.setRequired(as(v, boolean.class));
+		else if (is(k, "softMax")) item.setSoftMaximum(as(v, item.getType()));
+		else if (is(k, "softMin")) item.setSoftMinimum(as(v, item.getType()));
+		else if (is(k, "stepSize")) item.setStepSize(as(v, double.class));
+		else if (is(k, "style")) item.setWidgetStyle(as(v, String.class));
+		else if (is(k, "visibility")) item.setVisibility(as(v, ItemVisibility.class));
+		else if (is(k, "value")) item.setDefaultValue(as(v, item.getType()));
+		else item.set(k, v.toString());
+	}
+
+	/** Super terse comparison helper method. */
+	private boolean is(final String key, final String desired) {
+		return desired.equalsIgnoreCase(key);
+	}
+
+	/** Super terse conversion helper method. */
+	private <T> T as(final Object v, final Class<T> type) {
+		final T converted = convertService.convert(v, type);
+		if (converted != null) return converted;
+		// NB: Attempt to convert via string.
+		// This is useful in cases where a weird type of object came back
+		// (e.g., org.scijava.sjep.eval.Unresolved), but which happens to have a
+		// nice string representation which ultimately is expressible as the type.
+		return convertService.convert(v.toString(), type);
+	}
+
+	private <T> List<T> asList(final Object v, final Class<T> type) {
+		final ArrayList<T> result = new ArrayList<>();
+		final List<?> list = as(v, List.class);
+		for (final Object item : list) {
+			result.add(as(item, type));
 		}
-		else if ("choices".equalsIgnoreCase(key)) {
-			// FIXME: Regex above won't handle {a,b,c} syntax.
-//			item.setChoices(choices);
-		}
-		else if ("columns".equalsIgnoreCase(key)) {
-			item.setColumnCount(convertService.convert(value, int.class));
-		}
-		else if ("description".equalsIgnoreCase(key)) {
-			item.setDescription(value);
-		}
-		else if ("initializer".equalsIgnoreCase(key)) {
-			item.setInitializer(value);
-		}
-		else if ("type".equalsIgnoreCase(key)) {
-			item.setIOType(convertService.convert(value, ItemIO.class));
-		}
-		else if ("label".equalsIgnoreCase(key)) {
-			item.setLabel(value);
-		}
-		else if ("max".equalsIgnoreCase(key)) {
-			item.setMaximumValue(convertService.convert(value, item.getType()));
-		}
-		else if ("min".equalsIgnoreCase(key)) {
-			item.setMinimumValue(convertService.convert(value, item.getType()));
-		}
-		else if ("name".equalsIgnoreCase(key)) {
-			item.setName(value);
-		}
-		else if ("persist".equalsIgnoreCase(key)) {
-			item.setPersisted(convertService.convert(value, boolean.class));
-		}
-		else if ("persistKey".equalsIgnoreCase(key)) {
-			item.setPersistKey(value);
-		}
-		else if ("required".equalsIgnoreCase(key)) {
-			item.setRequired(convertService.convert(value, boolean.class));
-		}
-		else if ("softMax".equalsIgnoreCase(key)) {
-			item.setSoftMaximum(convertService.convert(value, item.getType()));
-		}
-		else if ("softMin".equalsIgnoreCase(key)) {
-			item.setSoftMinimum(convertService.convert(value, item.getType()));
-		}
-		else if ("stepSize".equalsIgnoreCase(key)) {
-			try {
-				final double stepSize = Double.parseDouble(value);
-				item.setStepSize(stepSize);
-			}
-			catch (final NumberFormatException exc) {
-				log.warn("Script parameter " + item.getName() +
-					" has an invalid stepSize: " + value);
-			}
-		}
-		else if ("style".equalsIgnoreCase(key)) {
-			item.setWidgetStyle(value);
-		}
-		else if ("visibility".equalsIgnoreCase(key)) {
-			item.setVisibility(convertService.convert(value, ItemVisibility.class));
-		}
-		else if ("value".equalsIgnoreCase(key)) {
-			item.setDefaultValue(convertService.convert(value, item.getType()));
-		}
-		else {
-			throw new ScriptException("Invalid attribute name: " + key);
-		}
+		return result;
 	}
 
 	/**
@@ -516,6 +552,14 @@ public class ScriptInfo extends AbstractModuleInfo implements Contextual {
 		}
 
 		return builder.toString();
+	}
+
+	// -- Deprecated methods --
+
+	/** @deprecated Use {@link #isReturnValueAppended()} instead. */
+	@Deprecated
+	public boolean isReturnValueDeclared() {
+		return !isReturnValueAppended();
 	}
 
 }

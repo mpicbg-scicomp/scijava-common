@@ -32,21 +32,17 @@
 package org.scijava.script;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 
-import javax.script.ScriptEngineFactory;
-import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 
 import org.scijava.Context;
@@ -54,26 +50,25 @@ import org.scijava.Gateway;
 import org.scijava.InstantiableException;
 import org.scijava.MenuPath;
 import org.scijava.Priority;
+import org.scijava.app.AppService;
 import org.scijava.command.CommandService;
-import org.scijava.event.EventHandler;
 import org.scijava.log.LogService;
 import org.scijava.module.Module;
 import org.scijava.module.ModuleService;
 import org.scijava.object.LazyObjects;
+import org.scijava.parse.ParseService;
 import org.scijava.plugin.AbstractSingletonService;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
-import org.scijava.plugin.PluginInfo;
 import org.scijava.plugin.PluginService;
+import org.scijava.plugin.SciJavaPlugin;
 import org.scijava.service.Service;
-import org.scijava.service.event.ServicesLoadedEvent;
-import org.scijava.util.AppUtils;
 import org.scijava.util.ClassUtils;
 import org.scijava.util.ColorRGB;
 import org.scijava.util.ColorRGBA;
 
 /**
- * Default service for working with scripting languages.
+ * Default service for working with scripts.
  * 
  * @author Johannes Schindelin
  * @author Curtis Rueden
@@ -93,6 +88,12 @@ public class DefaultScriptService extends
 	private CommandService commandService;
 
 	@Parameter
+	private AppService appService;
+
+	@Parameter
+	private ParseService parser;
+
+	@Parameter
 	private LogService log;
 
 	/** Index of registered scripting languages. */
@@ -104,8 +105,8 @@ public class DefaultScriptService extends
 	/** Menu prefix to use for each script directory, if any. */
 	private HashMap<File, MenuPath> menuPrefixes;
 
-	/** Index of available scripts, by script <em>file</em>. */
-	private HashMap<File, ScriptInfo> scripts;
+	/** Index of available scripts, by script path. */
+	private HashMap<String, ScriptInfo> scripts;
 
 	/** Table of short type names to associated {@link Class}. */
 	private HashMap<String, Class<?>> aliasMap;
@@ -115,21 +116,6 @@ public class DefaultScriptService extends
 	@Override
 	public ScriptLanguageIndex getIndex() {
 		return scriptLanguageIndex();
-	}
-
-	@Override
-	public List<ScriptLanguage> getLanguages() {
-		return new ArrayList<ScriptLanguage>(getIndex());
-	}
-
-	@Override
-	public ScriptLanguage getLanguageByExtension(final String extension) {
-		return getIndex().getByExtension(extension);
-	}
-
-	@Override
-	public ScriptLanguage getLanguageByName(final String name) {
-		return getIndex().getByName(name);
 	}
 
 	// -- ScriptService methods - scripts --
@@ -187,34 +173,6 @@ public class DefaultScriptService extends
 	}
 
 	@Override
-	public Future<ScriptModule> run(final String path, final String script,
-		final boolean process, final Object... inputs)
-	{
-		return run(path, new StringReader(script), process, inputs);
-	}
-
-	@Override
-	public Future<ScriptModule> run(final String path, final String script,
-		final boolean process, final Map<String, Object> inputMap)
-	{
-		return run(path, new StringReader(script), process, inputMap);
-	}
-
-	@Override
-	public Future<ScriptModule> run(final String path, final Reader reader,
-		final boolean process, final Object... inputs)
-	{
-		return run(new ScriptInfo(getContext(), path, reader), process, inputs);
-	}
-
-	@Override
-	public Future<ScriptModule> run(final String path, final Reader reader,
-		final boolean process, final Map<String, Object> inputMap)
-	{
-		return run(new ScriptInfo(getContext(), path, reader), process, inputMap);
-	}
-
-	@Override
 	public Future<ScriptModule> run(final ScriptInfo info, final boolean process,
 		final Object... inputs)
 	{
@@ -229,21 +187,6 @@ public class DefaultScriptService extends
 	}
 
 	@Override
-	public boolean canHandleFile(final File file) {
-		return getIndex().canHandleFile(file);
-	}
-
-	@Override
-	public boolean canHandleFile(final String fileName) {
-		return getIndex().canHandleFile(fileName);
-	}
-
-	@Override
-	public void addAlias(final Class<?> type) {
-		addAlias(type.getSimpleName(), type);
-	}
-
-	@Override
 	public void addAlias(final String alias, final Class<?> type) {
 		aliasMap().put(alias, type);
 	}
@@ -252,8 +195,12 @@ public class DefaultScriptService extends
 	public synchronized Class<?> lookupClass(final String alias)
 		throws ScriptException
 	{
-		final Class<?> type = aliasMap().get(alias);
-		if (type != null) return type;
+		final String componentAlias = stripArrayNotation(alias);
+		final Class<?> type = aliasMap().get(componentAlias);
+		if (type != null) {
+			final int arrayDim = (alias.length() - componentAlias.length()) / 2;
+			return makeArrayType(type, arrayDim);
+		}
 
 		try {
 			final Class<?> c = ClassUtils.loadClass(alias, false);
@@ -265,13 +212,6 @@ public class DefaultScriptService extends
 			se.initCause(exc);
 			throw se;
 		}
-	}
-
-	// -- PTService methods --
-
-	@Override
-	public Class<ScriptLanguage> getPluginType() {
-		return ScriptLanguage.class;
 	}
 
 	// -- Service methods --
@@ -289,18 +229,6 @@ public class DefaultScriptService extends
 			}
 
 		});
-	}
-
-	// -- Event handlers --
-
-	@EventHandler
-	private void
-		onEvent(@SuppressWarnings("unused") final ServicesLoadedEvent evt)
-	{
-		// NB: Add service type aliases after all services have joined the context.
-		for (final Service service : getContext().getServiceIndex()) {
-			addAliases(aliasMap(), service.getClass());
-		}
 	}
 
 	// -- Helper methods - lazy initialization --
@@ -324,7 +252,7 @@ public class DefaultScriptService extends
 	}
 
 	/** Gets {@link #scripts}, initializing if needed. */
-	private HashMap<File, ScriptInfo> scripts() {
+	private HashMap<String, ScriptInfo> scripts() {
 		if (scripts == null) initScripts();
 		return scripts;
 	}
@@ -343,21 +271,7 @@ public class DefaultScriptService extends
 
 		// add ScriptLanguage plugins
 		for (final ScriptLanguage language : getInstances()) {
-			index.add(language, false);
-		}
-
-		// Now look for the ScriptEngines in javax.scripting. We only do that
-		// now since the javax.scripting framework does not provide all the
-		// functionality we might want to use in a SciJava application.
-		final ScriptEngineManager manager = new ScriptEngineManager();
-		for (final ScriptEngineFactory factory : manager.getEngineFactories()) {
-			index.add(factory, true);
-		}
-
-		// Inject the context into languages which need it: the
-		// wrapped engine factories from the ScriptEngineManager.
-		for (final ScriptLanguage language : index) {
-			if (language.getContext() == null) language.setContext(getContext());
+			index.add(language, true);
 		}
 
 		scriptLanguageIndex = index;
@@ -367,11 +281,11 @@ public class DefaultScriptService extends
 	private synchronized void initScriptDirs() {
 		if (scriptDirs != null) return;
 
-		final ArrayList<File> dirs = new ArrayList<File>();
+		final ArrayList<File> dirs = new ArrayList<>();
 
 		// append default script directories
-		final File baseDir = AppUtils.getBaseDirectory(getClass()); //FIXME
-		dirs.add(new File(baseDir, "scripts"));
+		final File baseDir = appService.getApp().getBaseDirectory();
+		dirs.add(new File(baseDir, SCRIPTS_RESOURCE_DIR));
 
 		// append additional script directories from system property
 		final String scriptsPath = System.getProperty(SCRIPTS_PATH_PROPERTY);
@@ -387,20 +301,20 @@ public class DefaultScriptService extends
 	/** Initializes {@link #menuPrefixes}. */
 	private synchronized void initMenuPrefixes() {
 		if (menuPrefixes != null) return;
-		menuPrefixes = new HashMap<File, MenuPath>();
+		menuPrefixes = new HashMap<>();
 	}
 
 	/** Initializes {@link #scripts}. */
 	private synchronized void initScripts() {
 		if (scripts != null) return; // already initialized
 
-		final HashMap<File, ScriptInfo> map = new HashMap<File, ScriptInfo>();
+		final HashMap<String, ScriptInfo> map = new HashMap<>();
 
-		final ArrayList<ScriptInfo> scriptList = new ArrayList<ScriptInfo>();
-		new ScriptFinder(this).findScripts(scriptList);
+		final ArrayList<ScriptInfo> scriptList = new ArrayList<>();
+		new ScriptFinder(context()).findScripts(scriptList);
 
 		for (final ScriptInfo info : scriptList) {
-			map.put(asFile(info.getPath()), info);
+			map.put(info.getPath(), info);
 		}
 
 		scripts = map;
@@ -410,7 +324,7 @@ public class DefaultScriptService extends
 	private synchronized void initAliasMap() {
 		if (aliasMap != null) return; // already initialized
 
-		final HashMap<String, Class<?>> map = new HashMap<String, Class<?>>();
+		final HashMap<String, Class<?>> map = new HashMap<>();
 
 		// primitives
 		addAliases(map, boolean.class, byte.class, char.class, double.class,
@@ -422,22 +336,35 @@ public class DefaultScriptService extends
 
 		// built-in types
 		addAliases(map, Context.class, BigDecimal.class, BigInteger.class,
-			ColorRGB.class, ColorRGBA.class, File.class, String.class);
+			ColorRGB.class, ColorRGBA.class, Date.class, File.class, String.class);
+
+		// service types
+		addAliases(map, pluginClasses(Service.class));
 
 		// gateway types
-		final List<PluginInfo<Gateway>> gatewayPlugins =
-			pluginService.getPluginsOfType(Gateway.class);
-		for (final PluginInfo<Gateway> info : gatewayPlugins) {
-			try {
-				addAliases(map, info.loadClass());
-			}
-			catch (final InstantiableException exc) {
-				log.warn("Ignoring invalid gateway: " + info.getClassName(), exc);
-			}
-		}
+		addAliases(map, pluginClasses(Gateway.class));
 
 		aliasMap = map;
 	}
+
+	// -- Helper methods - run --
+
+	/**
+	 * Gets a {@link ScriptInfo} for the given file, creating a new one if none
+	 * are registered with the service.
+	 */
+	private ScriptInfo getOrCreate(final File file) {
+		final ScriptInfo info = scripts().get(file);
+		if (info != null) return info;
+		return new ScriptInfo(getContext(), file);
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private Future<ScriptModule> cast(final Future<Module> future) {
+		return (Future) future;
+	}
+
+	// -- Helper methods - aliases --
 
 	private void addAliases(final HashMap<String, Class<?>> map,
 		final Class<?>... types)
@@ -457,32 +384,26 @@ public class DefaultScriptService extends
 		addAliases(map, type.getInterfaces());
 	}
 
-	// -- Helper methods - run --
-
-	/**
-	 * Gets a {@link ScriptInfo} for the given file, creating a new one if none
-	 * are registered with the service.
-	 */
-	private ScriptInfo getOrCreate(final File file) {
-		final ScriptInfo info = scripts().get(file);
-		if (info != null) return info;
-		return new ScriptInfo(getContext(), file);
+	private Class<?>[] pluginClasses(final Class<? extends SciJavaPlugin> type) {
+		return pluginService.getPluginsOfType(type).stream().map(info -> {
+			try {
+				return info.loadClass();
+			}
+			catch (final InstantiableException exc) {
+				log.warn("Invalid class: " + info.getClassName(), exc);
+				return null;
+			}
+		}).toArray(Class<?>[]::new);
 	}
 
-	private File asFile(final String path) {
-		final File file = new File(path);
-		try {
-			return file.getCanonicalFile();
-		}
-		catch (final IOException exc) {
-			log.warn(exc);
-			return file.getAbsoluteFile();
-		}
+	private String stripArrayNotation(final String alias) {
+		if (!alias.endsWith("[]")) return alias;
+		return stripArrayNotation(alias.substring(0, alias.length() - 2));
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private Future<ScriptModule> cast(final Future<Module> future) {
-		return (Future) future;
+	private Class<?> makeArrayType(final Class<?> type, final int arrayDim) {
+		if (arrayDim <= 0) return type;
+		return makeArrayType(ClassUtils.getArrayClass(type), arrayDim - 1);
 	}
 
 }

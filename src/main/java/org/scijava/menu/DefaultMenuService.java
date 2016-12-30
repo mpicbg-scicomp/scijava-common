@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.scijava.UIDetails;
 import org.scijava.event.EventHandler;
 import org.scijava.event.EventService;
 import org.scijava.module.ModuleInfo;
@@ -72,26 +71,8 @@ public class DefaultMenuService extends AbstractService implements MenuService
 	// -- MenuService methods --
 
 	@Override
-	public ShadowMenu getMenu() {
-		return getMenu(UIDetails.APPLICATION_MENU_ROOT);
-	}
-
-	@Override
 	public ShadowMenu getMenu(final String menuRoot) {
 		return rootMenus().get(menuRoot);
-	}
-
-	@Override
-	public <T> T createMenus(final MenuCreator<T> creator, final T menu) {
-		return createMenus(UIDetails.APPLICATION_MENU_ROOT, creator, menu);
-	}
-
-	@Override
-	public <T> T createMenus(final String menuRoot,
-		final MenuCreator<T> creator, final T menu)
-	{
-		creator.createMenus(getMenu(menuRoot), menu);
-		return menu;
 	}
 
 	// -- Event handlers --
@@ -145,12 +126,12 @@ public class DefaultMenuService extends AbstractService implements MenuService
 	{
 		// categorize modules by menu root
 		final HashMap<String, ArrayList<ModuleInfo>> modulesByMenuRoot =
-			new HashMap<String, ArrayList<ModuleInfo>>();
+			new HashMap<>();
 		for (final ModuleInfo info : items) {
 			final String menuRoot = info.getMenuRoot();
 			ArrayList<ModuleInfo> modules = modulesByMenuRoot.get(menuRoot);
 			if (modules == null) {
-				modules = new ArrayList<ModuleInfo>();
+				modules = new ArrayList<>();
 				modulesByMenuRoot.put(menuRoot, modules);
 			}
 			modules.add(info);
@@ -192,7 +173,7 @@ public class DefaultMenuService extends AbstractService implements MenuService
 	/** Initializes {@link #rootMenus}. */
 	private synchronized void initRootMenus() {
 		if (rootMenus != null) return;
-		final HashMap<String, ShadowMenu> map = new HashMap<String, ShadowMenu>();
+		final HashMap<String, ShadowMenu> map = new HashMap<>();
 
 		final List<ModuleInfo> allModules = moduleService.getModules();
 		addModules(allModules, map);

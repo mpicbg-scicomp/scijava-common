@@ -32,7 +32,12 @@
 package org.scijava.plugin;
 
 import org.scijava.Contextual;
+import org.scijava.Identifiable;
+import org.scijava.Locatable;
 import org.scijava.Prioritized;
+import org.scijava.Versioned;
+import org.scijava.log.LogService;
+import org.scijava.log.Logged;
 
 /**
  * Base interface for {@link Contextual}, {@link Prioritized} plugins that
@@ -42,8 +47,21 @@ import org.scijava.Prioritized;
  * 
  * @author Curtis Rueden
  */
-public interface RichPlugin extends Contextual, Prioritized, HasPluginInfo,
-	SciJavaPlugin
+public interface RichPlugin extends SciJavaPlugin, Contextual, Prioritized,
+	HasPluginInfo, Logged, Identifiable, Locatable, Versioned
 {
-	// NB: Marker interface.
+
+	// -- Identifiable methods --
+
+	@Override
+	default String getIdentifier() {
+		return "plugin:" + getClass().getName();
+	}
+
+	// -- Logged methods --
+
+	@Override
+	default LogService log() {
+		return context().getService(LogService.class);
+	}
 }

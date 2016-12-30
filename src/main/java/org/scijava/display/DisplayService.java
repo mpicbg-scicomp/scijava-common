@@ -50,11 +50,17 @@ import org.scijava.service.SciJavaService;
  */
 public interface DisplayService extends SciJavaService {
 
-	EventService getEventService();
+	default EventService eventService() {
+		return context().getService(EventService.class);
+	}
 
-	ObjectService getObjectService();
+	default ObjectService objectService() {
+		return context().getService(ObjectService.class);
+	}
 
-	PluginService getPluginService();
+	default PluginService pluginService() {
+		return context().getService(PluginService.class);
+	}
 
 	/** Gets the currently active display (of any Display type). */
 	Display<?> getActiveDisplay();
@@ -183,4 +189,23 @@ public interface DisplayService extends SciJavaService {
 	 */
 	Display<?> createDisplayQuietly(Object o);
 
+	// -- Deprecated methods --
+
+	/** @deprecated Use {@link #eventService()} instead. */
+	@Deprecated
+	default EventService getEventService() {
+		return eventService();
+	}
+
+	/** @deprecated Use {@link #objectService()} instead. */
+	@Deprecated
+	default ObjectService getObjectService() {
+		return objectService();
+	}
+
+	/** @deprecated Use {@link #pluginService()} instead. */
+	@Deprecated
+	default PluginService getPluginService() {
+		return pluginService();
+	}
 }

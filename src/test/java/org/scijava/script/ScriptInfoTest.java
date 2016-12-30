@@ -32,6 +32,7 @@
 package org.scijava.script;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -42,8 +43,10 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.script.Bindings;
 import javax.script.ScriptContext;
@@ -55,6 +58,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.scijava.Context;
 import org.scijava.ItemIO;
+import org.scijava.ItemVisibility;
 import org.scijava.log.LogService;
 import org.scijava.module.ModuleItem;
 import org.scijava.plugin.Plugin;
@@ -84,6 +88,42 @@ public class ScriptInfoTest {
 	// -- Tests --
 
 	/**
+	 * Tests that the return value <em>is</em> appended as an extra output when no
+	 * explicit outputs were declared.
+	 */
+	@Test
+	public void testReturnValueAppended() throws Exception {
+		final String script = "" + //
+			"% @LogService log\n" + //
+			"% @int value\n";
+		final ScriptModule scriptModule =
+			scriptService.run("include-return-value.bsizes", script, true).get();
+
+		final Map<String, Object> outputs = scriptModule.getOutputs();
+		assertEquals(1, outputs.size());
+		assertTrue(outputs.containsKey(ScriptModule.RETURN_VALUE));
+	}
+
+	/**
+	 * Tests that the return value is <em>not</em> appended as an extra output
+	 * when explicit outputs were declared.
+	 */
+	@Test
+	public void testReturnValueExcluded() throws Exception {
+		final String script = "" + //
+			"% @LogService log\n" + //
+			"% @OUTPUT int value\n";
+		final ScriptModule scriptModule =
+			scriptService.run("exclude-return-value.bsizes", script, true).get();
+
+		final Map<String, Object> outputs = scriptModule.getOutputs();
+		assertEquals(1, outputs.size());
+		assertTrue(outputs.containsKey("value"));
+		assertFalse(outputs.containsKey(ScriptModule.RETURN_VALUE));
+	}
+
+
+	/**
 	 * Ensures parameters are parsed correctly from scripts, even in the presence
 	 * of noise like e-mail addresses.
 	 */
@@ -96,7 +136,7 @@ public class ScriptInfoTest {
 		final ScriptModule scriptModule =
 			scriptService.run("hello.bsizes", script, true).get();
 
-		final Object output = scriptModule.getOutput("result");
+		final Object output = scriptModule.getReturnValue();
 
 		if (output == null) fail("null result");
 		else if (!(output instanceof Integer)) {
@@ -121,9 +161,8 @@ public class ScriptInfoTest {
 		// verify that the version is correct
 		final ScriptInfo info = new ScriptInfo(context, scriptFile);
 		final String version = info.getVersion();
-		final String timestampPattern = "\\d{4}-\\d{2}-\\d{2}-\\d{2}:\\d{2}:\\d{2}";
 		final String sha1 = "28f4a2880d604774ac5d604d35f431047a087c9e";
-		assertTrue(version.matches("^" + timestampPattern + "-" + sha1 + "$"));
+		assertTrue(version.matches("^" + sha1 + "$"));
 
 		// clean up the temporary directory
 		FileUtils.deleteRecursively(tmpDir);
@@ -141,35 +180,46 @@ public class ScriptInfoTest {
 			"% @LogService(required = false) log\n" + //
 			"% @int(label=\"Slider Value\", softMin=5, softMax=15, " + //
 			"stepSize=3, value=11, style=\"slider\") sliderValue\n" + //
+			"% @String(persist = false, family='Carnivora', " + //
+			"choices={'quick brown fox', 'lazy dog'}) animal\n" + //
+			"% @String(visibility=MESSAGE) msg\n" + //
 			"% @BOTH java.lang.StringBuilder buffer";
 
 		final ScriptInfo info =
 			new ScriptInfo(context, "params.bsizes", new StringReader(script));
 
+		final List<?> noChoices = Collections.emptyList();
+
 		final ModuleItem<?> log = info.getInput("log");
 		assertItem("log", LogService.class, null, ItemIO.INPUT, false, true, null,
-			null, null, null, null, null, null, null, log);
+			null, null, null, null, null, null, null, noChoices, log);
 
 		final ModuleItem<?> sliderValue = info.getInput("sliderValue");
 		assertItem("sliderValue", int.class, "Slider Value", ItemIO.INPUT, true,
-			true, null, "slider", 11, null, null, 5, 15, 3.0, sliderValue);
+			true, null, "slider", 11, null, null, 5, 15, 3.0, noChoices, sliderValue);
+
+		final ModuleItem<?> animal = info.getInput("animal");
+		final List<String> animalChoices = //
+			Arrays.asList("quick brown fox", "lazy dog");
+		assertItem("animal", String.class, null, ItemIO.INPUT, true, false,
+			null, null, null, null, null, null, null, null, animalChoices, animal);
+		assertEquals(animal.get("family"), "Carnivora"); // test custom attribute
+
+		final ModuleItem<?> msg = info.getInput("msg");
+		assertSame(ItemVisibility.MESSAGE, msg.getVisibility());
 
 		final ModuleItem<?> buffer = info.getOutput("buffer");
 		assertItem("buffer", StringBuilder.class, null, ItemIO.BOTH, true, true,
-			null, null, null, null, null, null, null, null, buffer);
-
-		final ModuleItem<?> result = info.getOutput("result");
-		assertItem("result", Object.class, null, ItemIO.OUTPUT, true, true, null,
-			null, null, null, null, null, null, null, result);
+			null, null, null, null, null, null, null, null, noChoices, buffer);
 
 		int inputCount = 0;
-		final ModuleItem<?>[] inputs = { log, sliderValue, buffer };
+		final ModuleItem<?>[] inputs = { log, sliderValue, animal, msg, buffer };
 		for (final ModuleItem<?> inItem : info.inputs()) {
 			assertSame(inputs[inputCount++], inItem);
 		}
 
 		int outputCount = 0;
-		final ModuleItem<?>[] outputs = { buffer, result };
+		final ModuleItem<?>[] outputs = { buffer };
 		for (final ModuleItem<?> outItem : info.outputs()) {
 			assertSame(outputs[outputCount++], outItem);
 		}
@@ -180,7 +230,7 @@ public class ScriptInfoTest {
 		final boolean persist, final String persistKey, final String style,
 		final Object value, final Object min, final Object max,
 		final Object softMin, final Object softMax, final Number stepSize,
-		final ModuleItem<?> item)
+		final List<?> choices, final ModuleItem<?> item)
 	{
 		assertEquals(name, item.getName());
 		assertSame(type, item.getType());
@@ -196,6 +246,7 @@ public class ScriptInfoTest {
 		assertEquals(softMin, item.getSoftMinimum());
 		assertEquals(softMax, item.getSoftMaximum());
 		assertEquals(stepSize, item.getStepSize());
+		assertEquals(choices, item.getChoices());
 	}
 
 	/**

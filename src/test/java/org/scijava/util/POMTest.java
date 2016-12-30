@@ -33,7 +33,6 @@ package org.scijava.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -103,8 +102,8 @@ public class POMTest {
 		final String issueManagementURL = pom.getIssueManagementURL();
 		assertEquals("https://github.com/scijava/scijava-common/issues",
 			issueManagementURL);
-		assertNull(pom.getOrganizationName());
-		assertNull(pom.getOrganizationURL());
+		assertEquals("SciJava", pom.getOrganizationName());
+		assertEquals("http://www.scijava.org/", pom.getOrganizationURL());
 		assertTrue(pom.getPath().endsWith("pom.xml"));
 		assertTrue(pom.getProjectDescription().startsWith(
 			"SciJava Common is a shared library for SciJava software."));
@@ -137,9 +136,8 @@ public class POMTest {
 		final POM pom = new POM(new File("pom.xml"));
 		final ArrayList<Element> developers =
 			pom.elements("//project/developers/developer");
-		assertEquals(2, developers.size());
+		assertEquals(1, developers.size());
 		assertEquals("ctrueden", XML.cdata(developers.get(0), "id"));
-		assertEquals("hinerm", XML.cdata(developers.get(1), "id"));
 	}
 
 }

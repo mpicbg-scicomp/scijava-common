@@ -32,6 +32,7 @@
 package org.scijava.script;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -107,12 +108,14 @@ public class ScriptFinderTest {
 			"Math > divide", //
 			"Scripts > fox", //
 			"Math > multiply", //
+			"Math > pow", //
 			"Scripts > quick", //
 			"Math > Trig > sin", //
 			"Math > subtract", //
 			"Math > Trig > tan", //
 		};
 		assertMenuPaths(expected, scripts);
+		assertURLsMatch(scripts);
 	}
 
 	/**
@@ -140,12 +143,14 @@ public class ScriptFinderTest {
 			"Foo > Bar > Scripts > fox", //
 			"Foo > Bar > ignored", //
 			"Foo > Bar > Math > multiply", //
+			"Math > pow", //
 			"Foo > Bar > Scripts > quick", //
 			"Foo > Bar > Math > Trig > sin", //
 			"Foo > Bar > Math > subtract", //
 			"Foo > Bar > Math > Trig > tan", //
 		};
 		assertMenuPaths(expected, scripts);
+		assertURLsMatch(scripts);
 	}
 
 	/**
@@ -172,12 +177,14 @@ public class ScriptFinderTest {
 			"Math > divide", //
 			"Plugins > fox", //
 			"Math > multiply", //
+			"Math > pow", //
 			"Plugins > quick", //
 			"Math > Trig > sin", //
 			"Math > subtract", //
 			"Math > Trig > tan", //
 		};
 		assertMenuPaths(expected, scripts);
+		assertURLsMatch(scripts);
 	}
 
 	// -- Helper methods --
@@ -192,8 +199,8 @@ public class ScriptFinderTest {
 	}
 
 	private ArrayList<ScriptInfo> findScripts(final ScriptService scriptService) {
-		final ScriptFinder scriptFinder = new ScriptFinder(scriptService);
-		final ArrayList<ScriptInfo> scripts = new ArrayList<ScriptInfo>();
+		final ScriptFinder scriptFinder = new ScriptFinder(scriptService.context());
+		final ArrayList<ScriptInfo> scripts = new ArrayList<>();
 		scriptFinder.findScripts(scripts);
 		Collections.sort(scripts);
 		return scripts;
@@ -206,6 +213,14 @@ public class ScriptFinderTest {
 		for (int i=0; i<expected.length; i++) {
 			final String actual = scripts.get(i).getMenuPath().getMenuString();
 			assertEquals(expected[i], actual);
+		}
+	}
+
+	private void assertURLsMatch(final ArrayList<ScriptInfo> scripts) {
+		for (final ScriptInfo info : scripts) {
+			final String urlPath = info.getURL().getPath();
+			final String path = info.getPath();
+			assertTrue(urlPath + " <> " + path, urlPath.endsWith("/" + path));
 		}
 	}
 

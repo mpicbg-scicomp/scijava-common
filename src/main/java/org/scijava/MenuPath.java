@@ -56,7 +56,7 @@ public class MenuPath extends ArrayList<MenuEntry> {
 	 * the argument will make a copy.
 	 */
 	public MenuPath(final Collection<? extends MenuEntry> menuEntries) {
-		addAll(menuEntries);
+		if (menuEntries != null) addAll(menuEntries);
 	}
 
 	/**
@@ -66,10 +66,28 @@ public class MenuPath extends ArrayList<MenuEntry> {
 	 * @see #PATH_SEPARATOR
 	 */
 	public MenuPath(final String path) {
+		this(path, PATH_SEPARATOR);
+	}
+
+	/**
+	 * Creates a menu path with entries parsed from the given string, splitting on
+	 * the specified separator.
+	 */
+	public MenuPath(final String path, final String separator) {
+		this(path, separator, true);
+	}
+
+	/**
+	 * Creates a menu path with entries parsed from the given string, splitting on
+	 * the specified separator, and trimming whitespace if indicated.
+	 */
+	public MenuPath(final String path, final String separator,
+		final boolean trim)
+	{
 		if (path != null && !path.isEmpty()) {
-			final String[] tokens = path.split(PATH_SEPARATOR);
+			final String[] tokens = path.split(separator);
 			for (final String token : tokens) {
-				add(new MenuEntry(token.trim()));
+				add(new MenuEntry(trim ? token.trim() : token));
 			}
 		}
 	}

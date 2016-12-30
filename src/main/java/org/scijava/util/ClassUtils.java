@@ -364,7 +364,9 @@ public final class ClassUtils {
 	 *
 	 * @param c The class to scan for annotated methods.
 	 * @param annotationClass The type of annotation for which to scan.
-	 * @return A new list containing all methods with the requested annotation.
+	 * @return A list containing all methods with the requested annotation. Note
+	 *         that for performance reasons, lists may be cached and reused, so it
+	 *         is best to make a copy of the result if you need to modify it.
 	 */
 	public static <A extends Annotation> List<Method> getAnnotatedMethods(
 		final Class<?> c, final Class<A> annotationClass)
@@ -372,7 +374,7 @@ public final class ClassUtils {
 		List<Method> methods = methodCache.getList(c, annotationClass);
 
 		if (methods == null) {
-			methods = new ArrayList<Method>();
+			methods = new ArrayList<>();
 			getAnnotatedMethods(c, annotationClass, methods);
 		}
 
@@ -417,7 +419,9 @@ public final class ClassUtils {
 	 *
 	 * @param c The class to scan for annotated fields.
 	 * @param annotationClass The type of annotation for which to scan.
-	 * @return A new list containing all fields with the requested annotation.
+	 * @return A list containing all fields with the requested annotation. Note
+	 *         that for performance reasons, lists may be cached and reused, so it
+	 *         is best to make a copy of the result if you need to modify it.
 	 */
 	public static <A extends Annotation> List<Field> getAnnotatedFields(
 		final Class<?> c, final Class<A> annotationClass)
@@ -425,7 +429,7 @@ public final class ClassUtils {
 		List<Field> fields = fieldCache.getList(c, annotationClass);
 
 		if (fields == null) {
-			fields = new ArrayList<Field>();
+			fields = new ArrayList<>();
 			getAnnotatedFields(c, annotationClass, fields);
 		}
 
@@ -506,7 +510,7 @@ public final class ClassUtils {
 
 			// Initialize step - determine which queries are solved
 			final Set<Class<? extends Annotation>> keysToDrop =
-				new HashSet<Class<? extends Annotation>>();
+				new HashSet<>();
 			for (final Class<? extends Annotation> annotationClass : query.keySet()) {
 				// Fields
 				if (fieldCache.getList(scannedClass, annotationClass) != null) {
@@ -525,7 +529,7 @@ public final class ClassUtils {
 			// Stop now if we know all requested information is cached
 			if (query.isEmpty()) return;
 
-			final List<Class<?>> inherited = new ArrayList<Class<?>>();
+			final List<Class<?>> inherited = new ArrayList<>();
 
 			// cache all parents recursively
 			final Class<?> superClass = scannedClass.getSuperclass();
@@ -882,7 +886,7 @@ public final class ClassUtils {
 		{
 			Map<Class<? extends Annotation>, List<T>> map = get(c);
 			if (map == null) {
-				map = new HashMap<Class<? extends Annotation>, List<T>>();
+				map = new HashMap<>();
 				put(c, map);
 			}
 
@@ -904,7 +908,7 @@ public final class ClassUtils {
 		{
 			List<T> elements = getList(c, annotationClass);
 			if (elements == null) {
-				elements = new ArrayList<T>();
+				elements = new ArrayList<>();
 				putList(c, annotationClass, elements);
 			}
 			return elements;

@@ -5,17 +5,21 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>9.6.0</version>
+		<version>12.0.0</version>
 		<relativePath />
 	</parent>
 
 	<artifactId>scijava-common</artifactId>
-	<version>2.53.1-SNAPSHOT</version>
+	<version>2.62.0-SNAPSHOT</version>
 
 	<name>SciJava Common</name>
-	<description>SciJava Common is a shared library for SciJava software. It provides a plugin framework, with an extensible mechanism for service discovery, backed by its own annotation processor, so that plugins can be loaded dynamically. It is used by both ImageJ and SCIFIO.</description>
+	<description>SciJava Common is a shared library for SciJava software. It provides a plugin framework, with an extensible mechanism for service discovery, backed by its own annotation processor, so that plugins can be loaded dynamically. It is used by downstream projects in the SciJava ecosystem, such as ImageJ and SCIFIO.</description>
 	<url>http://scijava.org/</url>
 	<inceptionYear>2009</inceptionYear>
+	<organization>
+		<name>SciJava</name>
+		<url>http://www.scijava.org/</url>
+	</organization>
 	<licenses>
 		<license>
 			<name>Simplified BSD License</name>
@@ -27,10 +31,7 @@
 		<developer>
 			<id>ctrueden</id>
 			<name>Curtis Rueden</name>
-			<email>ctrueden@wisc.edu</email>
-			<url>http://loci.wisc.edu/people/curtis-rueden</url>
-			<organization>UW-Madison LOCI</organization>
-			<organizationUrl>http://loci.wisc.edu/</organizationUrl>
+			<url>http://imagej.net/User:Rueden</url>
 			<roles>
 				<role>founder</role>
 				<role>lead</role>
@@ -40,27 +41,15 @@
 				<role>support</role>
 				<role>maintainer</role>
 			</roles>
-			<timezone>-6</timezone>
-		</developer>
-		<developer>
-			<id>hinerm</id>
-			<name>Mark Hiner</name>
-			<email>hiner@wisc.edu</email>
-			<url>http://loci.wisc.edu/people/mark-hiner</url>
-			<organization>UW-Madison LOCI</organization>
-			<organizationUrl>http://loci.wisc.edu/</organizationUrl>
-			<roles>
-				<role>lead</role>
-				<role>developer</role>
-				<role>debugger</role>
-				<role>reviewer</role>
-				<role>support</role>
-				<role>maintainer</role>
-			</roles>
-			<timezone>-6</timezone>
 		</developer>
 	</developers>
 	<contributors>
+		<contributor>
+			<name>Mark Hiner</name>
+			<url>http://imagej.net/User:Hinerm</url>
+			<roles><role>founder</role></roles>
+			<properties><id>hinerm</id></properties>
+		</contributor>
 		<contributor>
 			<name>Johannes Schindelin</name>
 			<url>http://imagej.net/User:Schindelin</url>
@@ -82,7 +71,13 @@
 			<properties><id>dietzc</id></properties>
 		</contributor>
 		<contributor>
+			<name>Richard Domander</name>
+			<url>http://imagej.net/User:Rdom</url>
+			<properties><id>rimadoma</id></properties>
+		</contributor>
+		<contributor>
 			<name>Gabriel Einsdorf</name>
+			<url>http://imagej.net/User:Gab1one</url>
 			<properties><id>gab1one</id></properties>
 		</contributor>
 		<contributor>
@@ -91,6 +86,7 @@
 		</contributor>
 		<contributor>
 			<name>Kevin Mader</name>
+			<url>http://imagej.net/User:Ksmader</url>
 			<properties><id>kmader</id></properties>
 		</contributor>
 		<contributor>
@@ -98,6 +94,16 @@
 			<properties><id>jaywarrick</id></properties>
 		</contributor>
 	</contributors>
+
+	<mailingLists>
+		<mailingList>
+			<name>SciJava</name>
+			<subscribe>https://groups.google.com/group/scijava</subscribe>
+			<unsubscribe>https://groups.google.com/group/scijava</unsubscribe>
+			<post>scijava@googlegroups.com</post>
+			<archive>https://groups.google.com/group/scijava</archive>
+		</mailingList>
+	</mailingLists>
 
 	<scm>
 		<connection>scm:git:git://github.com/scijava/scijava-common</connection>
@@ -115,10 +121,22 @@
 	</ciManagement>
 
 	<properties>
-		<scijava.jvm.test.version>1.8</scijava.jvm.test.version>
+		<package-name>org.scijava</package-name>
+
+		<license.licenseName>bsd_2</license.licenseName>
+		<license.projectName>SciJava Common shared library for SciJava software.</license.projectName>
+		<license.copyrightOwners>Board of Regents of the University of
+Wisconsin-Madison, Broad Institute of MIT and Harvard, and Max Planck
+Institute of Molecular Cell Biology and Genetics.</license.copyrightOwners>
 	</properties>
 
 	<dependencies>
+		<!-- SciJava dependencies -->
+		<dependency>
+			<groupId>org.scijava</groupId>
+			<artifactId>scijava-expression-parser</artifactId>
+		</dependency>
+
 		<!-- Third-party dependencies -->
 		<dependency>
 			<groupId>com.googlecode.gentyref</groupId>
@@ -140,28 +158,18 @@
 	</dependencies>
 
 	<build>
+		<!--
+		SciJava Common provides a plugin indexer which handles its
+		@Plugin annotations, in the form of a compile-time annotation
+		processor. SJC also provides plugins of various sorts, such
+		as the core Service plugin implementations.
+
+		In order for these to be processed correctly and avoid a
+		chicken-and-egg problem with annotation processing here, we
+		disable annotation processing during compilation, and instead
+		run the plugin indexer manually in the process-classes phase.
+		-->
 		<plugins>
-			<plugin>
-				<artifactId>maven-jar-plugin</artifactId>
-				<configuration>
-					<archive>
-						<manifest>
-							<packageName>org.scijava</packageName>
-						</manifest>
-					</archive>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>license-maven-plugin</artifactId>
-				<configuration>
-					<licenseName>bsd_2</licenseName>
-					<organizationName>Board of Regents of the University of
-Wisconsin-Madison, Broad Institute of MIT and Harvard, and Max Planck
-Institute of Molecular Cell Biology and Genetics.</organizationName>
-					<projectName>SciJava Common shared library for SciJava software.</projectName>
-				</configuration>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

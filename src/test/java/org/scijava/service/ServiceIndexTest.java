@@ -34,6 +34,7 @@ package org.scijava.service;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 
@@ -64,6 +65,16 @@ public class ServiceIndexTest {
 		assertSame(DefaultPluginService.class, all.get(1).getClass());
 		assertSame(DefaultThreadService.class, all.get(2).getClass());
 		assertSame(StderrLogService.class, all.get(3).getClass());
+		context.dispose();
+	}
+
+	@Test
+	public void testMarkerInterfaces() {
+		final Context context = new Context();
+		for (final Service s : context.getServiceIndex().getAll()) {
+			assertTrue(s.getClass().getName(), s instanceof SciJavaService);
+		}
+		context.dispose();
 	}
 
 	/**
@@ -71,9 +82,11 @@ public class ServiceIndexTest {
 	 */
 	@Test
 	public void testGetPrevService() {
+		final Context context = new Context(SciJavaService.class);
+
 		// Create a service index where the OptionsService hierarchy should be:
 		// HigherOptionsService > DefaultOptionsService > LowerOptionsService
-		final ServiceIndex serviceIndex = setUpPrivateServices();
+		final ServiceIndex serviceIndex = setUpPrivateServices(context);
 
 		// DefaultOptionsService should be the previous service to LowerOptionsService
 		assertEquals(DefaultOptionsService.class, serviceIndex.getPrevService(
@@ -87,6 +100,8 @@ public class ServiceIndexTest {
 		// There should not be a previous service before HigherOptionsService
 		assertNull(serviceIndex.getPrevService(OptionsService.class,
 			HigherOptionsService.class));
+
+		context.dispose();
 	}
 
 	/**
@@ -94,9 +109,11 @@ public class ServiceIndexTest {
 	 */
 	@Test
 	public void testGetNextService() {
+		final Context context = new Context(SciJavaService.class);
+
 		// Create a service index where the OptionsService hierarchy should be:
 		// HigherOptionService > DefaultOptionService > LowerOptionService
-		final ServiceIndex serviceIndex = setUpPrivateServices();
+		final ServiceIndex serviceIndex = setUpPrivateServices(context);
 
 		// DefaultOptionsService should be the next service to HigherOptionsService
 		assertEquals(DefaultOptionsService.class, serviceIndex.getNextService(
@@ -110,6 +127,8 @@ public class ServiceIndexTest {
 		// There should not be a next service after LowerOptionsService
 		assertNull(serviceIndex.getNextService(OptionsService.class,
 			LowerOptionsService.class));
+
+		context.dispose();
 	}
 
 	// -- Helper methods --
@@ -117,8 +136,7 @@ public class ServiceIndexTest {
 	/**
 	 * @return A {@link ServiceIndex} with all private services manually added.
 	 */
-	private ServiceIndex setUpPrivateServices() {
-		final Context context = new Context(SciJavaService.class);
+	private ServiceIndex setUpPrivateServices(final Context context) {
 		final ServiceIndex serviceIndex = context.getServiceIndex();
 		serviceIndex.add(new HigherOptionsService());
 		serviceIndex.add(new LowerOptionsService());

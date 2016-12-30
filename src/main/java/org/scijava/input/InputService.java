@@ -45,7 +45,9 @@ import org.scijava.service.SciJavaService;
  */
 public interface InputService extends SciJavaService {
 
-	EventService getEventService();
+	default EventService eventService() {
+		return context().getService(EventService.class);
+	}
 
 	InputModifiers getModifiers();
 
@@ -98,4 +100,11 @@ public interface InputService extends SciJavaService {
 	 */
 	boolean isButtonDown(int button);
 
+	// -- Deprecated methods --
+
+	/** @deprecated Use {@link #eventService()} instead. */
+	@Deprecated
+	default EventService getEventService() {
+		return eventService();
+	}
 }
